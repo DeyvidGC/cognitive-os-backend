@@ -42,7 +42,8 @@ def login(db: Session, email: str, password: str, ttl: int) -> TokenResponse:
     credential = db.scalar(select(LocalCredential).where(
         LocalCredential.email == email.lower()).with_for_update())
     now = datetime.now(UTC)
-    valid = password_hash.verify(password, credential.password_hash if credential else dummy_hash)
+    valid, updated_hash = password_hash.verify_and_update(
+        password, credential.password_hash if credential else dummy_hash)
     if credential is None:
         raise ApplicationError(401, "Invalid credentials")
     if credential.locked_until and credential.locked_until > now:
@@ -58,8 +59,8 @@ def login(db: Session, email: str, password: str, ttl: int) -> TokenResponse:
         raise ApplicationError(401, "Invalid credentials")
     credential.failed_attempts = 0
     credential.locked_until = None
-    if password_hash.check_needs_rehash(credential.password_hash):
-        credential.password_hash = password_hash.hash(password)
+    if updated_hash:
+        credential.password_hash = updated_hash
     raw_token = secrets.token_urlsafe(32)
     expires_at = now + timedelta(seconds=ttl)
     db.add(AuthToken(token_hash=digest_token(raw_token), user_id=credential.user_id,

@@ -11,6 +11,8 @@ Si una ejecucion falla, ejecutar `ROLLBACK` antes de corregirla y reintentar.
 - `002_pgvector.sql`: requiere instalar previamente pgvector en el servidor.
   Agrega `chunk_embeddings` con vectores de 1536 dimensiones y nombre del modelo.
   No genera embeddings; la API debera generarlos a partir de `knowledge_chunks`.
+- `004_local_auth.sql`: credenciales locales y tokens revocables. Requiere 001,
+  no requiere 002. El archivo `003_Query` es una consulta, no una migracion.
 
 Se empieza con busqueda vectorial exacta. Un indice HNSW se puede agregar cuando
 el volumen y las mediciones de latencia lo justifiquen. Cada consulta debe filtrar
@@ -21,14 +23,13 @@ Instalacion oficial en Windows:
 https://github.com/pgvector/pgvector#windows
 
 Las claves foraneas evitan referencias entre organizaciones, pero no sustituyen
-la autorizacion de lectura/escritura. La API aun debe implementar autenticacion,
-permisos, acceso SQL y transacciones de publicacion (revision de pasos, evidencias,
-inmutabilidad de versiones aprobadas y generacion de tutorial/indice).
+la autorizacion de lectura/escritura. La API implementa autenticacion local,
+permisos por membresia y publicacion manual. RLS, worker y vectores quedan pendientes.
 No se han creado credenciales ni se ha configurado un usuario de ejecucion para
 la API; no utilizar la cuenta administradora `postgres` como cuenta de la API.
 Los archivos de evidencia se guardaran fuera de PostgreSQL; aqui se guarda su
-referencia, hash y metadatos. `users.identity_subject` referencia una identidad
-externa; no contiene contrasenas.
+referencia, hash y metadatos. `users.identity_subject` identifica al usuario;
+las contrasenas se guardan como hashes en local_credentials, nunca como texto plano.
 
 Al incorporar Alembic, registrar esta base existente antes de generar cambios;
 no volver a crear estas tablas sobre una instalacion que ya tenga la version 001.

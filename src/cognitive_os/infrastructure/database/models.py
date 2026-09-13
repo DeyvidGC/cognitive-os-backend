@@ -97,3 +97,93 @@ class Job(Identified, Created, Base):
     locked_by: Mapped[str | None]
     last_error: Mapped[str | None]
     completed_at: Mapped[datetime | None]
+
+
+class Procedure(Identified, Created, Base):
+    __tablename__ = "procedures"
+    organization_id: Mapped[UUID]
+    title: Mapped[str]
+    scope: Mapped[str]
+
+
+class ProcedureVersion(Identified, Created, Base):
+    __tablename__ = "procedure_versions"
+    organization_id: Mapped[UUID]
+    procedure_id: Mapped[UUID]
+    source_session_id: Mapped[UUID | None]
+    version_number: Mapped[int]
+    status: Mapped[str] = mapped_column(default="draft")
+    summary: Mapped[str] = mapped_column(default="")
+    model_name: Mapped[str | None]
+    prompt_version: Mapped[str | None]
+    reviewer_id: Mapped[UUID | None]
+    approved_at: Mapped[datetime | None]
+    published_at: Mapped[datetime | None]
+
+
+class Step(Identified, Base):
+    __tablename__ = "steps"
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    position: Mapped[int]
+    instruction: Mapped[str]
+    expected_result: Mapped[str]
+    origin: Mapped[str]
+    validation_status: Mapped[str] = mapped_column(default="pending")
+
+
+class StepEvidence(Base):
+    __tablename__ = "step_evidence"
+    organization_id: Mapped[UUID] = mapped_column(primary_key=True)
+    step_id: Mapped[UUID] = mapped_column(primary_key=True)
+    evidence_id: Mapped[UUID] = mapped_column(primary_key=True)
+    explanation: Mapped[str]
+
+
+class Tutorial(Identified, Created, Base):
+    __tablename__ = "tutorials"
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    format: Mapped[str]
+    content: Mapped[str | None]
+    storage_key: Mapped[str | None]
+
+
+class KnowledgeChunk(Identified, Created, Base):
+    __tablename__ = "knowledge_chunks"
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    step_id: Mapped[UUID | None]
+    position: Mapped[int]
+    content: Mapped[str]
+
+
+class AuditEvent(Identified, Created, Base):
+    __tablename__ = "audit_events"
+    organization_id: Mapped[UUID]
+    actor_id: Mapped[UUID | None]
+    action: Mapped[str]
+    resource_type: Mapped[str]
+    resource_id: Mapped[UUID]
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class Evidence(Identified, Created, Base):
+    __tablename__ = "evidence"
+    organization_id: Mapped[UUID]
+    session_id: Mapped[UUID]
+    storage_key: Mapped[str]
+    media_type: Mapped[str]
+    sha256: Mapped[str]
+    size_bytes: Mapped[int]
+    captured_at: Mapped[datetime]
+
+
+class Clarification(Identified, Created, Base):
+    __tablename__ = "clarifications"
+    organization_id: Mapped[UUID]
+    session_id: Mapped[UUID]
+    question: Mapped[str]
+    answer: Mapped[str | None]
+    answered_by: Mapped[UUID | None]
+    resolved_at: Mapped[datetime | None]

@@ -20,3 +20,13 @@ def test_configuration_from_environment(monkeypatch):
     application = create_app(Settings(_env_file=None))
     assert application.title == "Test API"
     assert application.state.settings.environment == "test"
+
+
+def test_auth_rate_limit_and_unconfigured_database():
+    with TestClient(create_app(Settings(_env_file=None))) as client:
+        for _ in range(20):
+            response = client.post("/api/v1/auth/login", json={"email": "a@example.com", "password": "password"})
+            assert response.status_code == 503
+        response = client.post("/api/v1/auth/login", json={"email": "a@example.com", "password": "password"})
+        assert response.status_code == 429
+        assert response.headers["retry-after"] == "60"

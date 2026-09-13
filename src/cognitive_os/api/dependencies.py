@@ -40,10 +40,17 @@ def current_membership(db: Db, token: Token,
     membership = db.get(Membership, (x_organization_id, token.user_id))
     if membership is None:
         raise ApplicationError(403, "Organization access denied")
-    # Readers consume published knowledge, not the expert's raw capture sessions.
-    if membership.role not in {"owner", "author", "reviewer"}:
-        raise ApplicationError(403, "Capture access denied")
     return membership
 
 
 Member = Annotated[Membership, Depends(current_membership)]
+
+
+def capture_membership(member: Member) -> Membership:
+    # Readers consume published knowledge, not the expert's raw capture sessions.
+    if member.role not in {"owner", "author", "reviewer"}:
+        raise ApplicationError(403, "Capture access denied")
+    return member
+
+
+CaptureMember = Annotated[Membership, Depends(capture_membership)]

@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
-from cognitive_os.api.dependencies import Db, Member
+from cognitive_os.api.dependencies import Db, CaptureMember as Member
 from cognitive_os.application import sessions
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.infrastructure.database.models import Job, LearningSession, SessionEvent

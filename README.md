@@ -35,20 +35,44 @@ src/cognitive_os/
     storage/       Archivos de evidencia
     ai/            Modelos y recuperacion
   workers/         Procesamiento en segundo plano
-migrations/        Futuras migraciones
+migrations/        Migraciones SQL versionadas
 tests/             Pruebas
 docs/              Arquitectura y alcance del producto
 ```
 
-Las carpetas de negocio y adaptadores son puntos de extension. Persistencia,
-autenticacion, sesiones, captura, IA y RAG aun no estan implementados.
-La siguiente entrega es persistencia y acceso para las sesiones de aprendizaje.
+Implementado: autenticacion local, modelos SQLAlchemy, sesiones, eventos,
+capturas de imagen, aclaraciones, procedimientos versionados, revision, tutoriales
+Markdown y busqueda textual por organizacion. Ver [docs/api.md](docs/api.md).
+
+La API no crea tablas al arrancar. Sobre una base nueva, ejecutar las migraciones
+001_initial y 004_local_auth; sobre la base existente ejecutar solamente 004.
+La migracion 002 de pgvector es opcional e independiente. `003_Query` es una
+consulta local, no una migracion.
+
+Configurar `COGNITIVE_DATABASE_URL` en `.env` segun `.env.example`, usando un usuario
+con acceso al esquema `cognitive`. Configurar `COGNITIVE_REGISTRATION_ENABLED=true`
+para habilitar altas. Sin URL los recursos de datos responden 503; documentacion
+y health siguen disponibles. No se usa una base alternativa ni datos en memoria.
+
+Cada registro crea una organizacion y su propietario. Invitaciones, recuperacion
+de contrasenas, verificacion de correo y administracion de miembros quedan pendientes.
+
+El cierre de sesion guarda un trabajo pending. Todavia no hay un worker que lo
+ejecute ni generacion automatica de contenido. El flujo editorial manual funciona.
+LangGraph, embeddings, busqueda vectorial, chat RAG y voz quedan pendientes; ver
+[docs/orquestacion.md](docs/orquestacion.md).
 
 ## Pruebas
 
 ```powershell
 .venv/Scripts/python.exe -m pytest
 ```
+
+Las pruebas de integracion requieren `COGNITIVE_TEST_DATABASE_URL` apuntando a un
+PostgreSQL de pruebas con migraciones 001 y 004. Generan datos con UUID nuevos;
+no usar una base con datos reales. Sin esa variable se omiten dichas pruebas.
+En Windows con PostgreSQL 18, `scripts/test_postgres.ps1` prepara y detiene una
+instancia temporal aislada automaticamente.
 
 ## Ramas
 

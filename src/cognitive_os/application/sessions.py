@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cognitive_os.domain.errors import ApplicationError
-from cognitive_os.infrastructure.database.models import Job, LearningSession, Membership, SessionEvent
+from cognitive_os.infrastructure.database.models import Clarification, Evidence, Job, LearningSession, Membership, SessionEvent
 from cognitive_os.schemas.sessions import EventCreate, SessionCreate
 
 
@@ -84,8 +84,15 @@ def finish_session(db: Session, member: Membership, session_id: UUID) -> Job:
     has_events = db.scalar(select(SessionEvent.id).where(
         SessionEvent.organization_id == member.organization_id,
         SessionEvent.session_id == session_id).limit(1))
-    if has_events is None:
-        raise ApplicationError(409, "Add at least one event before finishing")
+    has_evidence = db.scalar(select(Evidence.id).where(
+        Evidence.organization_id == member.organization_id, Evidence.session_id == session_id).limit(1))
+    if has_events is None and has_evidence is None:
+        raise ApplicationError(409, "Add at least one event or evidence before finishing")
+    unresolved = db.scalar(select(Clarification.id).where(
+        Clarification.organization_id == member.organization_id, Clarification.session_id == session_id,
+        Clarification.resolved_at.is_(None)).limit(1))
+    if unresolved:
+        raise ApplicationError(409, "Resolve pending clarifications before finishing")
     item.status = "processing"
     item.finished_at = datetime.now(UTC)
     job = Job(organization_id=member.organization_id, session_id=session_id,
