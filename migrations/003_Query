@@ -1,0 +1,29 @@
+BEGIN;
+SET LOCAL search_path TO cognitive, public;
+DO $$
+DECLARE org uuid; usr uuid; sess uuid;
+BEGIN
+INSERT INTO organizations(name) VALUES ('Schema verification') RETURNING id INTO org;
+INSERT INTO users(identity_subject, display_name) VALUES (gen_random_uuid()::text, 'Schema verification') RETURNING id INTO usr;
+INSERT INTO memberships VALUES (org, usr, 'author', now());
+INSERT INTO learning_sessions(organization_id,author_id,objective,application_name,consent_at) VALUES(org,usr,'Test','Test',now()) RETURNING id INTO sess;
+INSERT INTO session_events(organization_id,session_id,sequence_number,idempotency_key,event_type,offset_ms) VALUES(org,sess,0,'test','message',0);
+BEGIN
+INSERT INTO session_events(organization_id,session_id,sequence_number,idempotency_key,event_type,offset_ms) VALUES(org,sess,1,'test','message',1);
+RAISE EXCEPTION 'Idempotency constraint failed';
+EXCEPTION WHEN unique_violation THEN NULL;
+END;
+BEGIN
+INSERT INTO session_events(organization_id,session_id,sequence_number,idempotency_key,event_type,offset_ms) VALUES(gen_random_uuid(),sess,0,'foreign','message',0);
+RAISE EXCEPTION 'Organization constraint failed';
+EXCEPTION WHEN foreign_key_violation THEN NULL;
+END;
+BEGIN
+UPDATE learning_sessions SET status='invalid' WHERE id=sess;
+RAISE EXCEPTION 'Status constraint failed';
+EXCEPTION WHEN check_violation THEN NULL;
+END;
+RAISE NOTICE 'PASS: valid inserts, idempotency, organization references and status constraints';
+END $$;
+ROLLBACK;
+SELECT current_database() AS database, (SELECT count(*) FROM pg_tables WHERE schemaname='cognitive') AS tables, (SELECT version FROM cognitive.schema_migrations ORDER BY version DESC LIMIT 1) AS migration, (SELECT count(*) FROM cognitive.organizations) AS organizations_after_test, EXISTS(SELECT 1 FROM pg_available_extensions WHERE name='vector') AS vector_available;
