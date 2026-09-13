@@ -4,10 +4,14 @@ Actualizado: 13 de septiembre de 2026, zona America/Bogota.
 
 Esta carpeta explica el trabajo realizado, su motivo y como probarlo. El estado
 del codigo se verifico al escribirla. Los resultados de pruebas y cambios en la
-base real que se citan pertenecen a las verificaciones registradas en la conversacion;
-esta entrega de documentacion no vuelve a ejecutar migraciones ni modifica datos.
+base real que se citan pertenecen a las verificaciones registradas en la conversacion.
+La entrega de arranque vuelve a ejecutar pruebas y migraciones solamente contra
+PostgreSQL temporal aislado; no modifica datos de la base real.
 
 ## Por donde empezar
+
+- [Solucion de arranque en PyCharm y consola](guias/04-arranque.md).
+- [Requisitos con checklist, product backlog y sprints](planificacion/README.md).
 
 1. [Resumen y estructura de la API](guias/01-arquitectura.md).
 2. [Como probar los endpoints y sus permisos](guias/02-probar-api.md).
@@ -27,7 +31,7 @@ esta entrega de documentacion no vuelve a ejecutar migraciones ni modifica datos
 | Autenticacion local y recursos de negocio | Implementados; 35 operaciones versionadas |
 | Rutas heredadas del ejemplo | 2, fuera del OpenAPI |
 | Conexion directa de la API a PostgreSQL real | Pendiente de configurar la credencial en .env segun el ultimo estado registrado |
-| Pruebas | Ultima ejecucion registrada: 17 correctas contra PostgreSQL temporal |
+| Pruebas | 19 correctas contra PostgreSQL temporal, incluidas 2 regresiones de arranque |
 | Publicacion y busqueda textual | Implementadas mediante el flujo editorial manual |
 | pgvector y chunk_embeddings | Migracion preparada, no aplicada segun la ultima comprobacion |
 | Worker, LangGraph y respuestas generadas por IA | Pendientes |

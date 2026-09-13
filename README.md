@@ -5,6 +5,14 @@ en conocimiento revisable, tutoriales y consultas con RAG.
 
 ## Desarrollo local
 
+Guia explicada: [documentacion y seguimiento](docs/seguimiento/README.md).
+Plan del producto: [requisitos, backlog y sprints](docs/seguimiento/planificacion/README.md).
+
+En PyCharm, seleccionar **Cognitive API (Uvicorn)**, configuracion compartida en
+`.run/`. Utiliza `.venv` y un nombre de aplicacion explicito. La configuracion
+antigua de tipo FastAPI puede fallar al detectar el `app` importado en `main.py`.
+Ver [solucion de arranque](docs/seguimiento/guias/04-arranque.md).
+
 Python 3.12 o superior. Desde la raiz del proyecto en PowerShell:
 
 ```powershell
