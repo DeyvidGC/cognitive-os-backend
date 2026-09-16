@@ -9,6 +9,7 @@ nuevas propuestas se identifican como tales. No hay fechas de entrega comprometi
 - [Requisitos con checklist](requisitos.md): que debe cumplir el producto.
 - [Product backlog](product-backlog.md): historias, prioridad y aceptacion.
 - [Sprints y tablero](sprints.md): orden de trabajo y criterios de cierre.
+- [Lo que falta y lo que necesito de ti](lo-que-necesito.md): configuracion, decisiones y credenciales.
 - [Bitacora diaria](../bitacora/2026-09-13.md): evidencia de lo realizado.
 
 ## Como interpretar el avance

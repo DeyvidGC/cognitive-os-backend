@@ -93,6 +93,7 @@ Extraidos del OpenAPI del codigo el 2026-09-13. Los campos obligatorios deben en
 | --- | --- | --- | --- |
 | `id` | string (uuid) | Si | - |
 | `session_id` | string (uuid) o null | Si | - |
+| `version_id` | string (uuid) o null | Si | Version creada por el worker |
 | `kind` | string | Si | - |
 | `status` | string | Si | - |
 | `attempts` | integer | Si | - |

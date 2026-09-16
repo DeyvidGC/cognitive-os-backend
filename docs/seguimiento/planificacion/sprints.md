@@ -1,5 +1,7 @@
 # Sprints, tablero y criterios de cierre
 
+Incremento 2026-09-16: [sprints visuales y validacion real pendiente](entrega-visual.md).
+
 [Plan](README.md) | [Backlog](product-backlog.md)
 
 Propuesta: iteraciones de una semana una vez acordados disponibilidad y alcance.
@@ -21,8 +23,8 @@ un trabajo permanentemente pending. Historias propuestas: PB-01/02/08/18.
 
 - [x] Arranque explicito, configuracion compartida para PyCharm y regresiones.
 - [ ] Confirmar ejecucion desde el IDE y conexion HTTP a PostgreSQL real.
-- [ ] Implementar worker con reclamo atomico, leases, limite de reintentos y errores.
-- [ ] Probar idempotencia, concurrencia, caidas y recuperacion del worker.
+- [x] Implementar worker textual con reclamo atomico, leases, limite de reintentos y errores.
+- [x] Probar concurrencia, rechazo de worker vencido y reintentos del worker.
 - [ ] Preparar CI para API y worker.
 
 Demo de cierre: iniciar API/worker, cerrar una captura y observar una transicion
@@ -44,7 +46,7 @@ Demo: una captura produce un borrador revisable con evidencia; un humano publica
 
 Historias: PB-10/11/12. Bloqueo actual: extension pgvector no instalada.
 
-- [ ] Instalar/verificar pgvector y aplicar migracion 002.
+- [x] Verificar pgvector 0.8.6 y tabla chunk_embeddings en PostgreSQL real.
 - [ ] Elegir modelo de embeddings compatible con la dimension del esquema.
 - [ ] Indexar fragmentos publicados con reintentos e idempotencia.
 - [ ] Implementar busqueda semantica y pruebas de filtros/retirada de versiones.

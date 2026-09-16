@@ -26,7 +26,7 @@ en Query Tool. Sobre la base ya preparada no repetirlas. Consultar
 `SELECT * FROM cognitive.schema_migrations ORDER BY version;`.
 002_pgvector es opcional e independiente; 003_Query no es una migracion.
 
-Iniciar con `.venv/Scripts/python.exe -m uvicorn cognitive_os.main:app --reload`.
+Iniciar con `.venv/Scripts/python.exe -m uvicorn main:app --reload`.
 Abrir [Swagger](http://127.0.0.1:8000/docs). Que /health responda ok no demuestra
 que SQL este configurado: los recursos de datos pueden responder 503.
 

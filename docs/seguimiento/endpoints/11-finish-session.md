@@ -8,7 +8,7 @@ Estado: implementado en codigo al 2026-09-13. Requiere conexion SQL configurada 
 
 ## Para que sirve
 
-Exige un evento o evidencia y ninguna aclaracion pendiente. Cambia a processing y crea job consolidate/pending de forma atomica. Repetir devuelve el mismo job. El worker aun no existe: no convierte la sesion en completed.
+Exige un evento o evidencia y ninguna aclaracion pendiente. Cambia a processing y crea job consolidate/pending de forma atomica. Repetir devuelve el mismo job. El worker separado puede procesar texto y completar la sesion; ver [orquestacion](../guias/05-orquestacion.md).
 
 ## Acceso
 

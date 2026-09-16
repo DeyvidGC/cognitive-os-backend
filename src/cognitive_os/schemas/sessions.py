@@ -52,6 +52,8 @@ class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     session_id: UUID | None
+    version_id: UUID | None
+    recording_id: UUID | None
     kind: str
     status: str
     attempts: int

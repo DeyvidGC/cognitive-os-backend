@@ -1,5 +1,9 @@
 # Orquestacion de Cognitive OS
 
+Actualizacion: ya hay worker y grafo LangGraph para borradores desde texto.
+La [guia vigente](seguimiento/guias/05-orquestacion.md) describe ejecucion y limites.
+El texto siguiente conserva la propuesta inicial, no el estado actual.
+
 LangGraph encaja con el aprendizaje porque permite estado persistente, pausas para
 aclaraciones humanas y reanudacion. Esta entrega no lo instala ni ejecuta nodos
 ficticios: implementa las operaciones persistentes que necesitara la orquestacion.

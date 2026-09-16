@@ -1,12 +1,16 @@
 # Base vectorial: que es y como se usara
 
+Actualizacion 2026-09-16: [indexacion implementada, tablas y uso](04-video-y-vectores.md).
+El contenido inferior conserva el estado inicial de la extension.
+
 [Indice](../README.md) | [Tablas](02-tablas.md)
 
 ## Estado real
 
-La parte vectorial aun no esta activa segun la ultima comprobacion registrada.
-Existe [002_pgvector.sql](../../../migrations/002_pgvector.sql), pero no se ha
-aplicado. Esta documentacion no instala la extension ni genera embeddings.
+Se verificaron por SQL extension vector 0.8.6 y cognitive.chunk_embeddings en la
+base real. No volver a aplicar [002_pgvector.sql](../../../migrations/002_pgvector.sql)
+sobre tablas existentes. Los pasos de instalacion siguientes son para una base
+nueva. Generacion de embeddings y busqueda semantica aun no estan implementadas.
 GET /api/v1/knowledge/search ya funciona en codigo, pero usa busqueda textual.
 
 No necesitas una segunda base llamada vectorial. La propuesta es guardar los

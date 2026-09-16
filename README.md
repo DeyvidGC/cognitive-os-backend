@@ -18,10 +18,12 @@ Python 3.12 o superior. Desde la raiz del proyecto en PowerShell:
 ```powershell
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -e '.[dev]'
-.venv/Scripts/python.exe -m uvicorn cognitive_os.main:app --reload
+.venv/Scripts/python.exe -m uvicorn main:app --reload
 ```
 
 Documentacion interactiva: http://127.0.0.1:8000/docs
+Las ejecuciones locales usan el puerto 8000. El asistente detiene su ejecucion
+al terminar las comprobaciones para dejar el puerto libre para PyCharm.
 Estado del proceso: `GET /api/v1/health` (no comprueba servicios externos).
 Se conservan `/` y `/hello/{name}` por compatibilidad.
 
@@ -29,6 +31,9 @@ La configuracion lee variables con prefijo `COGNITIVE_` y un archivo `.env`
 opcional. Las variables disponibles estan en `.env.example`.
 
 ## Estructura
+
+Nuevo flujo visual: [pantalla, audio, agente, informes y reanudacion](docs/seguimiento/guias/06-aprendizaje-visual.md).
+Aplicar tambien migraciones 005 y 006 antes de usar esta version de la API.
 
 ```text
 src/cognitive_os/
@@ -65,9 +70,10 @@ y health siguen disponibles. No se usa una base alternativa ni datos en memoria.
 Cada registro crea una organizacion y su propietario. Invitaciones, recuperacion
 de contrasenas, verificacion de correo y administracion de miembros quedan pendientes.
 
-El cierre de sesion guarda un trabajo pending. Todavia no hay un worker que lo
-ejecute ni generacion automatica de contenido. El flujo editorial manual funciona.
-LangGraph, embeddings, busqueda vectorial, chat RAG y voz quedan pendientes; ver
+El cierre de sesion guarda un trabajo pending. El worker con LangGraph genera
+borradores desde texto con OpenAI; requiere clave local y proceso separado.
+Ver [como ejecutarlo](docs/seguimiento/guias/05-orquestacion.md).
+Embeddings, busqueda vectorial, chat RAG y voz quedan pendientes; ver
 [docs/orquestacion.md](docs/orquestacion.md).
 
 ## Pruebas

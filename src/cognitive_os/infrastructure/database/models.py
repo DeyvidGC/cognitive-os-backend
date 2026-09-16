@@ -87,6 +87,7 @@ class Job(Identified, Created, Base):
     organization_id: Mapped[UUID]
     session_id: Mapped[UUID | None]
     version_id: Mapped[UUID | None]
+    recording_id: Mapped[UUID | None]
     kind: Mapped[str]
     status: Mapped[str] = mapped_column(default="pending")
     idempotency_key: Mapped[str]
@@ -187,3 +188,69 @@ class Clarification(Identified, Created, Base):
     answer: Mapped[str | None]
     answered_by: Mapped[UUID | None]
     resolved_at: Mapped[datetime | None]
+
+
+class Recording(Identified, Created, Base):
+    __tablename__ = "recordings"
+    organization_id: Mapped[UUID]
+    session_id: Mapped[UUID]
+    idempotency_key: Mapped[str]
+    blob_key: Mapped[str]
+    blob_snapshot: Mapped[str | None]
+    media_type: Mapped[str]
+    size_bytes: Mapped[int]
+    content_sha256: Mapped[str | None]
+    audio_consent: Mapped[bool] = mapped_column(default=False)
+    status: Mapped[str] = mapped_column(default="uploading")
+    consent_at: Mapped[datetime]
+    uploaded_at: Mapped[datetime | None]
+    error_code: Mapped[str | None]
+
+
+class RecordingReport(Created, Base):
+    __tablename__ = "recording_reports"
+    recording_id: Mapped[UUID] = mapped_column(primary_key=True)
+    organization_id: Mapped[UUID]
+    content: Mapped[dict] = mapped_column(JSONB)
+    original_content: Mapped[dict] = mapped_column(JSONB)
+    sampling: Mapped[dict] = mapped_column(JSONB)
+    model_name: Mapped[str]
+    prompt_version: Mapped[str]
+    revision: Mapped[int] = mapped_column(default=1)
+    review_status: Mapped[str] = mapped_column(default="pending")
+    reviewer_id: Mapped[UUID | None]
+    reviewed_at: Mapped[datetime | None]
+    feedback: Mapped[str | None]
+    version_id: Mapped[UUID | None]
+
+
+class ReportRevision(Created, Base):
+    __tablename__ = "recording_report_revisions"
+    recording_id: Mapped[UUID] = mapped_column(primary_key=True)
+    revision: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[UUID]
+    snapshot: Mapped[dict] = mapped_column(JSONB)
+
+
+class StepRecordingEvidence(Base):
+    __tablename__ = "step_recording_evidence"
+    organization_id: Mapped[UUID]
+    step_id: Mapped[UUID] = mapped_column(primary_key=True)
+    recording_id: Mapped[UUID]
+    report_revision: Mapped[int]
+    frame_indices: Mapped[list] = mapped_column(JSONB)
+
+
+class AgentTurn(Identified, Created, Base):
+    __tablename__ = "agent_turns"
+    organization_id: Mapped[UUID]
+    session_id: Mapped[UUID]
+    user_id: Mapped[UUID]
+    client_message_id: Mapped[UUID]
+    request_hash: Mapped[str]
+    user_text: Mapped[str]
+    response: Mapped[dict | None] = mapped_column(JSONB)
+    status: Mapped[str]
+    locked_until: Mapped[datetime]
+    attempt_id: Mapped[UUID]
+    attempts: Mapped[int] = mapped_column(default=0)

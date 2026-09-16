@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from cognitive_os.application.sessions import get_session, require_author
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.infrastructure.database.models import (
-    AuditEvent, KnowledgeChunk, Membership, Procedure, ProcedureVersion, Step, StepEvidence, Tutorial,
+    AuditEvent, KnowledgeChunk, Membership, Procedure, ProcedureVersion, RecordingReport,
+    Step, StepEvidence, StepRecordingEvidence, Tutorial,
 )
 from cognitive_os.schemas.procedures import ProcedureCreate, StepWrite, VersionCreate
 
@@ -116,7 +117,15 @@ def transition(db: Session, member: Membership, version_id: UUID, action: str) -
         for step in steps:
             if step.origin in {"observed", "inferred"} and not db.scalar(select(StepEvidence.evidence_id).where(
                 StepEvidence.organization_id == member.organization_id, StepEvidence.step_id == step.id).limit(1)):
-                raise ApplicationError(409, "Observed and inferred steps require supporting evidence")
+                video_evidence = db.scalar(select(StepRecordingEvidence.step_id).join(
+                    RecordingReport, (RecordingReport.recording_id == StepRecordingEvidence.recording_id)
+                    & (RecordingReport.organization_id == StepRecordingEvidence.organization_id)
+                    & (RecordingReport.revision == StepRecordingEvidence.report_revision)).where(
+                        StepRecordingEvidence.step_id == step.id,
+                        StepRecordingEvidence.organization_id == member.organization_id,
+                        RecordingReport.review_status == "approved"))
+                if not video_evidence:
+                    raise ApplicationError(409, "Observed and inferred steps require supporting evidence")
     version.status = target
     if action == "approve":
         version.reviewer_id = member.user_id

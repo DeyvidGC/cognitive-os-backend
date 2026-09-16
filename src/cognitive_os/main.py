@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
@@ -28,6 +29,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 engine.dispose()
 
     application = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+    if settings.cors_origins:
+        application.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
+                                   allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+                                   allow_headers=["Authorization", "Content-Type", "X-Organization-ID"],
+                                   allow_credentials=False)
     application.state.settings = settings
     application.state.engine = None
     application.state.auth_limiter = AuthRateLimiter()
@@ -79,6 +85,3 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"message": f"Hello {name}"}
 
     return application
-
-
-app = create_app()

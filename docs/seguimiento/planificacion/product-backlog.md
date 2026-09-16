@@ -1,5 +1,13 @@
 # Product backlog
 
+Estado vigente 2026-09-16: [backlog visual](entrega-visual.md). Indexacion y busqueda
+de informes de video aprobados implementadas; chat RAG e indexacion de procedimientos
+solo textuales siguen pendientes. Lo inferior conserva el corte anterior.
+
+Actualizacion de orquestacion: PB-08 implementado para consolidacion textual;
+PB-09 parcial (grafo/adaptador, sin aclaraciones ni checkpoints); PB-10 verificado
+en DB real. PB-11/12/13 siguen pendientes. Ver la [guia vigente](../guias/05-orquestacion.md).
+
 [Plan](README.md) | [Requisitos](requisitos.md) | [Sprints](sprints.md)
 
 P0 = bloquea el uso/desarrollo inmediato; P1 = siguiente valor principal;
@@ -16,9 +24,9 @@ no certificado para produccion. Cada fila expresa una historia y su aceptacion.
 | PB-05 | Como autor, capturar un proceso con evidencia | RF-07/11 | P1 | L | Implementado | Eventos idempotentes, imagenes validas, aclaraciones y cierre atomico |
 | PB-06 | Como revisor, publicar conocimiento validado | RF-15/20 | P1 | L | Implementado | Borrador/revision/aprobacion/publicacion y concurrencia verificadas |
 | PB-07 | Como lector, encontrar procedimientos publicados | RF-22 | P1 | M | Implementado | Busqueda textual restringida por organizacion y publicacion |
-| PB-08 | Como autor, ver completarse el procesamiento | RF-12 | P1 | L | Pendiente | Worker reclama un job una sola vez, registra resultado/error, reintenta con limite y recupera leases vencidos; pruebas con dos workers |
-| PB-09 | Como autor, obtener un borrador asistido | RF-13 | P1 | L | Pendiente | Grafo LangGraph valida salida estructurada, conserva referencias, pide aclaracion y nunca publica automaticamente; pruebas con proveedor simulado |
-| PB-10 | Como administrador, habilitar vectores | RF-23 | P1 | M | Preparado | Extension disponible y migracion 002 aplicada/verificada en cognitive; no altera tablas ajenas |
+| PB-08 | Como autor, ver completarse el procesamiento | RF-12 | P1 | L | Implementado para texto | Worker reclama un job una sola vez, registra resultado/error, reintenta con limite y recupera leases vencidos; pruebas con dos workers |
+| PB-09 | Como autor, obtener un borrador asistido | RF-13 | P1 | L | Parcial: grafo/adaptador; aclaraciones y reanudacion pendientes | Grafo LangGraph valida salida estructurada, conserva referencias, pide aclaracion y nunca publica automaticamente; pruebas con proveedor simulado |
+| PB-10 | Como administrador, habilitar vectores | RF-23 | P1 | M | Verificado en base real | Extension disponible y migracion 002 aplicada/verificada en cognitive; no altera tablas ajenas |
 | PB-11 | Como sistema, indexar fragmentos semanticamente | RF-24 | P1 | L | Pendiente | Modelo/dimension definidos, embeddings reproducibles por contenido, upsert idempotente y reintentos; ningun secreto en logs |
 | PB-12 | Como lector, buscar por significado | RF-25 | P1 | M | Pendiente | Query vectorizada con mismo modelo, filtros previos de organizacion/publicacion y pruebas de aislamiento |
 | PB-13 | Como lector, preguntar y verificar la respuesta | RF-26 | P1 | L | Pendiente | Respuesta sustentada en fragmentos accesibles, referencias verificadas, rechazo sin evidencia y evaluacion contra inyeccion de instrucciones |

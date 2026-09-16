@@ -1,5 +1,17 @@
 # Guia y seguimiento de Cognitive OS
 
+## Entrega vigente: 2026-09-16
+
+- [Flujo visual, configuracion y contratos frontend](guias/06-aprendizaje-visual.md).
+- [Video, tablas y uso de pgvector](base-de-datos/04-video-y-vectores.md).
+- [Checklist, backlog y sprints](planificacion/entrega-visual.md).
+- [Bitacora y pruebas](bitacora/2026-09-16.md).
+- [Fichas de endpoints nuevos](endpoints/visual-catalogo.md).
+
+El contenido inferior conserva el corte anterior. Esta entrega aplica migraciones
+aditivas 005/006/007 a la base local, sin borrar datos existentes. Las pruebas con
+inserciones usan PostgreSQL aislado.
+
 Actualizado: 13 de septiembre de 2026, zona America/Bogota.
 
 Esta carpeta explica el trabajo realizado, su motivo y como probarlo. El estado
@@ -10,8 +22,11 @@ PostgreSQL temporal aislado; no modifica datos de la base real.
 
 ## Por donde empezar
 
+- [Orquestacion implementada: captura de texto a borrador](guias/05-orquestacion.md).
+
 - [Solucion de arranque en PyCharm y consola](guias/04-arranque.md).
 - [Requisitos con checklist, product backlog y sprints](planificacion/README.md).
+- [Pendientes y lo que necesito de ti para avanzar](planificacion/lo-que-necesito.md).
 
 1. [Resumen y estructura de la API](guias/01-arquitectura.md).
 2. [Como probar los endpoints y sus permisos](guias/02-probar-api.md).
@@ -31,10 +46,10 @@ PostgreSQL temporal aislado; no modifica datos de la base real.
 | Autenticacion local y recursos de negocio | Implementados; 35 operaciones versionadas |
 | Rutas heredadas del ejemplo | 2, fuera del OpenAPI |
 | Conexion directa de la API a PostgreSQL real | Pendiente de configurar la credencial en .env segun el ultimo estado registrado |
-| Pruebas | 19 correctas contra PostgreSQL temporal, incluidas 2 regresiones de arranque |
+| Pruebas | 29 correctas contra PostgreSQL temporal, con orquestacion simulada |
 | Publicacion y busqueda textual | Implementadas mediante el flujo editorial manual |
-| pgvector y chunk_embeddings | Migracion preparada, no aplicada segun la ultima comprobacion |
-| Worker, LangGraph y respuestas generadas por IA | Pendientes |
+| pgvector y chunk_embeddings | Verificados: extension 0.8.6 y tabla presentes en la base real |
+| Worker y LangGraph | Implementados para borradores desde texto; prueba con proveedor real pendiente |
 
 Los diagramas usan Mermaid. Un visor compatible los renderiza; en un editor de
 texto se ve su codigo. Cada diagrama tiene tambien una explicacion escrita.

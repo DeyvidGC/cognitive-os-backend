@@ -1,11 +1,5 @@
-"""Explicit entry point for Uvicorn and Python run configurations."""
+"""Main ASGI entry point for the complete API."""
 
-from cognitive_os.main import app
+from cognitive_os.main import create_app
 
-__all__ = ["app"]
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("cognitive_os.main:app", host="127.0.0.1", port=8000)
+app = create_app()

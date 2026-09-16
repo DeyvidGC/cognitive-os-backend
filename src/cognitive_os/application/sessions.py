@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cognitive_os.domain.errors import ApplicationError
-from cognitive_os.infrastructure.database.models import Clarification, Evidence, Job, LearningSession, Membership, SessionEvent
+from cognitive_os.infrastructure.database.models import Clarification, Evidence, Job, LearningSession, Membership, Recording, SessionEvent
 from cognitive_os.schemas.sessions import EventCreate, SessionCreate
 
 
@@ -74,19 +74,24 @@ def add_event(db: Session, member: Membership, session_id: UUID, data: EventCrea
 def finish_session(db: Session, member: Membership, session_id: UUID) -> Job:
     item = get_session(db, member, session_id, for_update=True)
     require_session_writer(member, item)
-    key = f"consolidate:{session_id}"
+    recording = db.scalar(select(Recording).where(
+        Recording.organization_id == member.organization_id, Recording.session_id == session_id))
+    kind = "analyze_recording" if recording else "consolidate"
+    key = f"{kind}:{session_id}"
     job = db.scalar(select(Job).where(Job.organization_id == member.organization_id,
                                       Job.idempotency_key == key))
     if job:
         return job
     if item.status != "capturing":
         raise ApplicationError(409, "Session cannot be finished in its current state")
+    if recording and recording.status != "uploaded":
+        raise ApplicationError(409, "Complete the video upload before finishing")
     has_events = db.scalar(select(SessionEvent.id).where(
         SessionEvent.organization_id == member.organization_id,
         SessionEvent.session_id == session_id).limit(1))
     has_evidence = db.scalar(select(Evidence.id).where(
         Evidence.organization_id == member.organization_id, Evidence.session_id == session_id).limit(1))
-    if has_events is None and has_evidence is None:
+    if has_events is None and has_evidence is None and recording is None:
         raise ApplicationError(409, "Add at least one event or evidence before finishing")
     unresolved = db.scalar(select(Clarification.id).where(
         Clarification.organization_id == member.organization_id, Clarification.session_id == session_id,
@@ -96,7 +101,9 @@ def finish_session(db: Session, member: Membership, session_id: UUID) -> Job:
     item.status = "processing"
     item.finished_at = datetime.now(UTC)
     job = Job(organization_id=member.organization_id, session_id=session_id,
-              kind="consolidate", idempotency_key=key)
+              kind=kind, idempotency_key=key, recording_id=recording.id if recording else None)
+    if recording:
+        recording.status = "queued"
     db.add(job)
     # Session closure and durable work reservation must commit together.
     db.commit()

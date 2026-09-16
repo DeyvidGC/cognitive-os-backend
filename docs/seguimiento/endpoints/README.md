@@ -1,5 +1,8 @@
 # Endpoints
 
+Actualizacion 2026-09-16: [24 rutas HTTP visuales y un WebSocket](visual-catalogo.md).
+El catalogo inferior conserva las rutas previas.
+
 Corte documental: 2026-09-13. 35 operaciones versionadas obtenidas del OpenAPI del codigo, mas 2 rutas heredadas.
 
 Cada ficha explica una operacion; los ejemplos usan datos ficticios. Los UUID se obtienen de las respuestas anteriores.

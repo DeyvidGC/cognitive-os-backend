@@ -1,5 +1,8 @@
 # Requisitos y checklist
 
+Ampliacion 2026-09-16: [checklist visual/audio/vectorial](entrega-visual.md).
+La lista inferior conserva la baseline previa.
+
 [Plan](README.md) | [Backlog](product-backlog.md)
 
 Estos requisitos consolidan lo construido y el alcance propuesto. Los elementos
@@ -21,8 +24,8 @@ de produccion son propuestas tecnicas, pendientes de priorizacion contigo.
 - [x] RF-09: Subir y descargar imagenes PNG/JPEG/WebP con validacion y permisos.
 - [x] RF-10: Crear, consultar y responder aclaraciones manualmente.
 - [x] RF-11: Cerrar captura y guardar un trabajo durable pending atomicamente.
-- [ ] RF-12: Procesar el trabajo con un worker, reintentos y recuperacion de fallos.
-- [ ] RF-13: Orquestar extraccion/validacion con LangGraph y modelos de IA.
+- [x] RF-12: Worker de consolidacion textual con reintentos, leases y recuperacion de fallos.
+- [ ] RF-13: Parcial: LangGraph y adaptador OpenAI implementados; faltan aclaraciones, checkpoints y validacion real.
 - [ ] RF-14: Recibir audio y transcribirlo; hoy solo se acepta texto de transcripcion.
 
 ## Edicion y publicacion
@@ -38,7 +41,7 @@ de produccion son propuestas tecnicas, pendientes de priorizacion contigo.
 ## Consulta y vectores
 
 - [x] RF-22: Buscar texto en versiones publicadas de la organizacion con referencias.
-- [ ] RF-23: Instalar pgvector y aplicar 002 en la base real; SQL preparado.
+- [x] RF-23: Verificados pgvector 0.8.6 y cognitive.chunk_embeddings en la base real.
 - [ ] RF-24: Generar embeddings versionados por modelo y persistirlos por fragmento.
 - [ ] RF-25: Busqueda semantica con filtros de organizacion y estado publicado.
 - [ ] RF-26: Chat RAG con referencias verificables y respuesta sin evidencia suficiente.
@@ -50,7 +53,7 @@ de produccion son propuestas tecnicas, pendientes de priorizacion contigo.
 - [x] RNF-03: Hash Argon2id, hash de tokens y errores de validacion sin eco de contrasenas.
 - [x] RNF-04: Limites locales de autenticacion y bloqueo temporal por fallos.
 - [ ] RNF-05: Limites distribuidos para multiples procesos/replicas (propuesto).
-- [x] RNF-06: Arranque explicito mediante Uvicorn y entrada Python.
+- [x] RNF-06: Arranque explicito mediante Uvicorn/PyCharm con main:app como entrada unica.
 - [ ] RNF-07: Validar manualmente el boton Run de PyCharm en el equipo del usuario.
 - [x] RNF-08: Suite automatizada con PostgreSQL temporal y pruebas de aislamiento/concurrencia.
 - [ ] RNF-09: CI que ejecute la suite y controles antes de integrar cambios (propuesto).

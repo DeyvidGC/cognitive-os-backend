@@ -8,7 +8,7 @@ Estado: implementado en codigo al 2026-09-13. Requiere conexion SQL configurada 
 
 ## Para que sirve
 
-Devuelve estado y contadores del job de la organizacion. No lo ejecuta, reintenta ni cancela. No expone last_error ni datos internos del lease.
+Devuelve estado, contadores y version_id del job de la organizacion. version_id permite consultar el borrador creado al completarse. No ejecuta, reintenta ni cancela el job. No expone last_error ni datos internos del lease.
 
 ## Acceso
 
