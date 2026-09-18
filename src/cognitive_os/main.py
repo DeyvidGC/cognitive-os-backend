@@ -1,16 +1,36 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from cognitive_os.api.v1.router import api_router
 from cognitive_os.core.config import Settings
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.core.rate_limit import AuthRateLimiter
+from cognitive_os.infrastructure.database.migrations import SchemaUnavailable, missing_migrations
+
+logger = logging.getLogger(__name__)
+
+
+def report_schema_state(engine: Engine) -> None:
+    """Log pending migrations at startup instead of failing per request later.
+
+    Startup keeps going: documentation and /health stay reachable, and
+    /health/ready reports the same detail to whoever calls the API.
+    """
+    try:
+        missing = missing_migrations(engine)
+    except SchemaUnavailable as error:
+        logger.error("Database not ready: %s", error.detail)
+        return
+    if missing:
+        logger.error("Database is missing migrations: %s. Apply them from migrations/ "
+                     "before using the API; see GET /api/v1/health/ready.", ", ".join(missing))
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -21,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.database_url:
             engine = create_engine(settings.database_url.get_secret_value(), pool_pre_ping=True,
                                    hide_parameters=True, connect_args={"connect_timeout": 5})
+            report_schema_state(engine)
         application.state.engine = engine
         workers = None
         try:
