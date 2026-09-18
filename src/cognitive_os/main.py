@@ -17,6 +17,19 @@ from cognitive_os.infrastructure.database.migrations import SchemaUnavailable, m
 logger = logging.getLogger(__name__)
 
 
+def log_database_error(request: Request, exc: Exception) -> None:
+    """Record why a database call failed, since the response never says.
+
+    A 503 reads the same whether PostgreSQL is down, a migration is missing or
+    the API role lacks a grant on one table, so without this the only way to tell
+    is to rerun the query by hand. The engine sets hide_parameters, so the
+    statement is logged without its bound values.
+    """
+    cause = getattr(exc, "orig", None) or exc
+    logger.error("Database error on %s %s: %s: %s", request.method, request.url.path,
+                 type(cause).__name__, cause)
+
+
 def report_schema_state(engine: Engine) -> None:
     """Log pending migrations at startup instead of failing per request later.
 
@@ -100,10 +113,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.exception_handler(OperationalError)
     @application.exception_handler(ProgrammingError)
     async def database_error(request: Request, exc: Exception):
+        # The body stays generic: "permission denied for table x" or a column name
+        # would describe the schema to any caller. The cause goes to the log, which
+        # is otherwise the one place the reason for a 503 is lost.
+        log_database_error(request, exc)
         return JSONResponse(status_code=503, content={"detail": "Database unavailable or migrations missing"})
 
     @application.exception_handler(IntegrityError)
     async def integrity_error(request: Request, exc: IntegrityError):
+        log_database_error(request, exc)
         return JSONResponse(status_code=409, content={"detail": "Resource conflicts with existing data"})
 
     @application.get("/", include_in_schema=False)
