@@ -36,6 +36,11 @@ def worker_loop(settings, kind, stop):
                 # Never emit SDK exception text, signed URLs or database credentials.
                 log.warning("Worker %s temporarily unavailable; retrying in 5 seconds", kind)
                 stop.wait(5)
+    except KeyboardInterrupt:
+        # Ctrl+C reaches every process in the console group, so each worker raises
+        # here while waiting and multiprocessing prints a traceback per process.
+        # LocalWorkers.close is already stopping us, so shut down quietly instead.
+        log.info("Worker %s stopping on interrupt", kind)
     finally:
         provider.close()
         engine.dispose()
