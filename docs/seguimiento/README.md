@@ -1,5 +1,24 @@
 # Guia y seguimiento de Cognitive OS
 
+## Actualizacion 2026-09-18
+
+Agente en vivo con voz bidireccional (`/agent/live-voice`), mediado por el
+backend hacia OpenAI Realtime API: capturas de pantalla periodicas, audio
+bidireccional y preguntas proactivas del modelo, alimentando el mismo informe
+que el analisis de video existente. El canal previo `/agent/live` (texto y
+capturas puntuales) queda igual.
+
+- [Ficha del endpoint nuevo](endpoints/63-agent-live-voice.md) |
+  [Ficha del canal de texto existente](endpoints/62-agent-live.md).
+- [Flujo y contratos actualizados](guias/06-aprendizaje-visual.md).
+- [Que debe implementar el frontend (seccion 7, nueva)](guias/07-mejoras-frontend.md).
+- [Tablas nuevas: realtime_voice_sessions y transcripcion en vivo](base-de-datos/04-video-y-vectores.md).
+- [Bitacora del dia](bitacora/2026-09-18.md).
+
+No se probo con audio real de navegador ni con una cuenta OpenAI Realtime
+real; el formato de eventos debe verificarse contra la documentacion vigente
+de OpenAI antes de esa prueba. El frontend para este canal no esta implementado.
+
 ## Actualizacion 2026-09-17
 
 [Word/PDF con capturas y diagramas BPMN](guias/10-documentos-y-bpmn.md):

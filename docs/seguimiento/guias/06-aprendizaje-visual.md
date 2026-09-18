@@ -35,7 +35,7 @@ fotogramas. El informe conserva esta limitacion; no equivale a observar cada fra
 El canal `/agent/live` sigue siendo mensajes y capturas puntuales (sin voz). El
 canal `/agent/live-voice` agrega voz bidireccional real vía OpenAI Realtime API,
 capturas periodicas y preguntas proactivas del modelo, mediadas siempre por el
-backend (ver [ficha del endpoint](../endpoints/62-agent-live.md)). Ninguno de los
+backend (ver [ficha del endpoint](../endpoints/63-agent-live-voice.md)). Ninguno de los
 dos transmite video continuo: la pantalla sigue llegando como capturas puntuales,
 no como stream de frames. `gpt-5.6-luna` genera texto/vision; `gpt-realtime`
 conversa por voz; `gpt-4o-mini-transcribe`/Whisper transcriben audio grabado;
@@ -172,7 +172,7 @@ Solo una sesion de voz activa por `learning_session`; una segunda conexion
 mientras la primera sigue abierta recibe 409. Duracion maxima configurable
 (`realtime_session_max_seconds`, 30 minutos por defecto); el servidor revalida
 la autorizacion periodicamente, no solo al conectar. Detalle completo, formato
-de audio y eventos en [ficha del endpoint](../endpoints/62-agent-live.md).
+de audio y eventos en [ficha del endpoint](../endpoints/63-agent-live-voice.md).
 
 ## Audio, notas, aclaraciones e informe
 
