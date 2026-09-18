@@ -22,14 +22,14 @@ class Settings(BaseSettings):
     azure_storage_container: str = Field(default="cognitive-recordings",
                                          validation_alias="AZURE_STORAGE_CONTAINER",
                                          pattern=r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
-    recording_max_bytes: int = Field(default=262144000, ge=1024, le=1073741824)
-    recording_max_seconds: int = Field(default=600, ge=1, le=600)
-    recording_frame_interval_seconds: int = Field(default=5, ge=5, le=60)
-    recording_lease_seconds: int = Field(default=900, ge=600, le=3600)
+    recording_max_bytes: int = Field(default=1073741824, ge=1024, le=1073741824)
+    recording_max_seconds: int = Field(default=1800, ge=1, le=1800)
+    recording_frame_interval_seconds: int = Field(default=15, ge=5, le=60)
+    recording_lease_seconds: int = Field(default=1800, ge=600, le=3600)
     cors_origins: list[str] = Field(default_factory=list)
     openai_transcription_model: str = Field(default="gpt-4o-mini-transcribe",
                                             validation_alias="OPENAI_TRANSCRIPTION_MODEL")
-    agent_max_turns_per_session: int = Field(default=120, ge=1, le=1000)
+    agent_max_turns_per_session: int = Field(default=240, ge=1, le=1000)
     agent_min_interval_seconds: int = Field(default=3, ge=1, le=60)
     environment: Literal["local", "test", "staging", "production"] = "local"
     database_url: SecretStr | None = None

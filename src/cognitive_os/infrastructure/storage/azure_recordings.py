@@ -36,7 +36,7 @@ class AzureRecordingStore:
 
     def transfer(self, recording, *, write=False):
         self.ensure_private()
-        expiry = datetime.now(UTC) + timedelta(minutes=15 if write else 5)
+        expiry = datetime.now(UTC) + timedelta(minutes=60)
         snapshot = None if write else recording.blob_snapshot
         token = generate_blob_sas(
             account_name=self.service.account_name, container_name=self.container,

@@ -60,6 +60,9 @@ async def live(session_id: UUID, socket: WebSocket):
         await asyncio.to_thread(check_auth)
         provider = OpenAILiveProvider(settings)
         await socket.send_json({"type": "ready", "model": settings.openai_model,
+                                "protocol_version": 2, "proactive_questions": True,
+                                "observation_interval_seconds": max(15, settings.agent_min_interval_seconds),
+                                "audio_input": False, "audio_output": False,
                                 "mode": "snapshot_conversation", "min_interval_seconds": settings.agent_min_interval_seconds})
         while True:
             raw = await asyncio.wait_for(socket.receive_text(), timeout=300)

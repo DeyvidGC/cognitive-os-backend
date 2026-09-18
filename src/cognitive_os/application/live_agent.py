@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from cognitive_os.application.auth import authenticate
 from cognitive_os.application.sessions import get_session, require_session_writer
 from cognitive_os.domain.errors import ApplicationError
-from cognitive_os.infrastructure.database.models import AgentTurn, Membership
+from cognitive_os.infrastructure.database.models import AgentTurn, Membership, Clarification
 
 
 def authorize(db, token, organization_id, session_id):
@@ -53,6 +53,15 @@ def handle_turn(engine, token, organization_id, session_id, data, settings, prov
     now = datetime.now(UTC)
     with Session(engine, expire_on_commit=False) as db:
         member, session = authorize(db, token, organization_id, session_id)
+        if data.clarification_id:
+            question = db.scalar(select(Clarification).where(
+                Clarification.id == data.clarification_id,
+                Clarification.organization_id == organization_id,
+                Clarification.session_id == session_id))
+            if question is None:
+                raise ApplicationError(404, "Clarification not found")
+            if not data.text.strip():
+                raise ApplicationError(422, "A clarification answer requires text")
         turn = db.scalar(select(AgentTurn).where(AgentTurn.organization_id == organization_id,
             AgentTurn.session_id == session_id, AgentTurn.client_message_id == data.message_id))
         if turn:
@@ -88,16 +97,46 @@ def handle_turn(engine, token, organization_id, session_id, data, settings, prov
         turn.attempt_id, turn.status, turn.locked_until = attempt, "pending", now + timedelta(seconds=120)
         objective = session.objective
         history_data = [{"user": h.user_text, "assistant": h.response} for h in reversed(history)]
+        questions = db.scalars(select(Clarification).where(
+            Clarification.organization_id == organization_id,
+            Clarification.session_id == session_id)).all()
+        history_data += [{"question": q.question, "answer": q.answer} for q in questions[-100:]]
         db.commit()
         turn_id = turn.id
     try:
         reply = provider.respond(objective, data.text, image, history_data).model_dump(mode="json")
         with Session(engine) as db:
             # Recheck token/session after the model call, before making the reply visible.
-            authorize(db, token, organization_id, session_id)
+            member, _ = authorize(db, token, organization_id, session_id)
             turn = db.get(AgentTurn, turn_id, with_for_update=True)
             if turn.attempt_id != attempt or turn.locked_until <= datetime.now(UTC):
                 raise ApplicationError(409, "Agent request expired; resend the message")
+            if data.clarification_id:
+                question = db.get(Clarification, data.clarification_id, with_for_update=True)
+                if question.resolved_at and question.answer != data.text.strip():
+                    raise ApplicationError(409, "Clarification was already answered")
+                question.answer = data.text.strip()
+                question.answered_by, question.resolved_at = member.user_id, datetime.now(UTC)
+            # The session lock serializes persistence across simultaneous sockets.
+            questions = db.scalars(select(Clarification).where(
+                Clarification.organization_id == organization_id,
+                Clarification.session_id == session_id)).all()
+            known = {q.question.strip().casefold() for q in questions}
+            pending = any(q.resolved_at is None for q in questions)
+            reply["clarifications"] = []
+            proposed = reply["questions"]
+            reply["questions"] = []
+            if not pending:
+                for text in proposed:
+                    text = text.strip()[:4000]
+                    if text and text.casefold() not in known:
+                        question = Clarification(organization_id=organization_id, session_id=session_id, question=text)
+                        db.add(question)
+                        db.flush()
+                        reply["questions"] = [text]
+                        reply["clarifications"] = [{"type": "clarification.created", "event_id": str(question.id),
+                            "clarification_id": str(question.id), "question": text, "offset_ms": data.offset_ms}]
+                        break
             turn.response, turn.status = reply, "completed"
             db.commit()
         return {"type": "reply", "message_id": str(data.message_id), "reply": reply}

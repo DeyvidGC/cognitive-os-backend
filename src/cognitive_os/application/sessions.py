@@ -17,7 +17,11 @@ def require_author(member: Membership):
 
 def create_session(db: Session, member: Membership, data: SessionCreate) -> LearningSession:
     require_author(member)
+    if data.procedure_id:
+        from cognitive_os.application.procedures import get_procedure
+        get_procedure(db, member, data.procedure_id)
     item = LearningSession(organization_id=member.organization_id, author_id=member.user_id,
+                           procedure_id=data.procedure_id,
                            objective=data.objective, application_name=data.application_name,
                            consent_at=datetime.now(UTC))
     db.add(item)

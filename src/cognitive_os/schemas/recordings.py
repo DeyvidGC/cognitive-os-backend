@@ -13,6 +13,8 @@ class RecordingCreate(BaseModel):
     consent: Literal[True]
     content_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     audio_consent: bool = False
+    title: str = Field(default="", max_length=200)
+    origin: Literal["screen_capture", "upload"] = "screen_capture"
 
     @field_validator("media_type", mode="before")
     @classmethod
@@ -25,6 +27,8 @@ class RecordingResponse(BaseModel):
     id: UUID
     session_id: UUID
     media_type: str
+    title: str = ""
+    origin: str = "screen_capture"
     size_bytes: int
     content_sha256: str | None
     audio_consent: bool

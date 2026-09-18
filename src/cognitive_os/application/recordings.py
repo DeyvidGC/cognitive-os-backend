@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from cognitive_os.application.sessions import get_session, require_session_writer
 from cognitive_os.domain.errors import ApplicationError
@@ -27,8 +27,8 @@ def create_recording(db, member, session_id, data, settings):
     existing = db.scalar(select(Recording).where(
         Recording.organization_id == member.organization_id, Recording.session_id == session_id))
     if existing:
-        if (existing.idempotency_key, existing.media_type, existing.size_bytes, existing.content_sha256, existing.audio_consent) != (
-                str(data.idempotency_key), data.media_type, data.size_bytes, data.content_sha256, data.audio_consent):
+        if (existing.idempotency_key, existing.media_type, existing.size_bytes, existing.content_sha256, existing.audio_consent, existing.title, existing.origin) != (
+                str(data.idempotency_key), data.media_type, data.size_bytes, data.content_sha256, data.audio_consent, data.title, data.origin):
             raise ApplicationError(409, "This session already has a different recording")
         return existing
     if session.status != "capturing":
@@ -39,7 +39,7 @@ def create_recording(db, member, session_id, data, settings):
     extension = "webm" if data.media_type == "video/webm" else "mp4"
     item = Recording(id=recording_id, organization_id=member.organization_id, session_id=session_id,
                      idempotency_key=str(data.idempotency_key), media_type=data.media_type,
-                     size_bytes=data.size_bytes, content_sha256=data.content_sha256,
+                     size_bytes=data.size_bytes, content_sha256=data.content_sha256, title=data.title, origin=data.origin,
                      audio_consent=data.audio_consent, consent_at=datetime.now(UTC),
                      blob_key=f"{member.organization_id}/{session_id}/{recording_id}.{extension}")
     db.add(item)
@@ -159,11 +159,19 @@ def convert_to_procedure(db, member, recording_id):
     if not content.instructions:
         raise ApplicationError(409, "Report needs instructions before conversion")
     session = get_session(db, member, recording.session_id)
-    procedure = Procedure(organization_id=member.organization_id, title=content.title, scope=session.objective)
-    db.add(procedure)
-    db.flush()
+    if session.procedure_id:
+        from cognitive_os.application.procedures import get_procedure
+        procedure = get_procedure(db, member, session.procedure_id, lock=True)
+    else:
+        procedure = Procedure(organization_id=member.organization_id, title=content.title, scope=session.objective)
+        db.add(procedure)
+        db.flush()
+        session.procedure_id = procedure.id
+    number = db.scalar(select(func.max(ProcedureVersion.version_number)).where(
+        ProcedureVersion.organization_id == member.organization_id,
+        ProcedureVersion.procedure_id == procedure.id)) or 0
     version = ProcedureVersion(organization_id=member.organization_id, procedure_id=procedure.id,
-                               source_session_id=session.id, version_number=1, status="draft",
+                               source_session_id=session.id, version_number=number + 1, status="draft",
                                summary=content.summary, model_name=report.model_name, prompt_version=report.prompt_version)
     db.add(version)
     db.flush()

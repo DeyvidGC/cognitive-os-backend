@@ -10,9 +10,15 @@ import sys
 import wave
 
 
+class VideoDurationExceeded(ValueError):
+    """Stable validation failure safe to expose without media contents."""
+
+
 def decode(path, directory, media_type, max_seconds, interval):
     import av
 
+    # Bound model input to at most 122 images, including the final frame.
+    interval = max(interval, math.ceil(max_seconds / 120))
     samples = []
     next_sample = 0.0
     last_timestamp = 0.0
@@ -31,14 +37,16 @@ def decode(path, directory, media_type, max_seconds, interval):
         for frame in container.decode(stream):
             last_frame = frame
             count += 1
-            if count > 72000 or frame.time is None or not math.isfinite(frame.time):
+            if count > max_seconds * 120 + 120 or frame.time is None or not math.isfinite(frame.time):
                 raise ValueError("Video decode limit or invalid timestamps")
             if frame.width * frame.height > 8_500_000:
                 raise ValueError("Frame resolution exceeds limit")
             if first_timestamp is None:
                 first_timestamp = float(frame.time)
             timestamp = float(frame.time) - first_timestamp
-            if timestamp < last_timestamp or timestamp > max_seconds:
+            if timestamp > max_seconds:
+                raise VideoDurationExceeded("recording_duration_exceeded")
+            if timestamp < last_timestamp:
                 raise ValueError("Video duration or timestamp order invalid")
             last_timestamp = timestamp
             if timestamp + 0.001 < next_sample:
@@ -77,12 +85,12 @@ def decode(path, directory, media_type, max_seconds, interval):
                     for converted in resampler.resample(frame):
                         written += converted.samples
                         if written > max_seconds * 16000:
-                            raise ValueError("Audio duration exceeds limit")
+                            raise VideoDurationExceeded("recording_duration_exceeded")
                         output.writeframes(converted.to_ndarray().tobytes())
                 for converted in resampler.resample(None):
                     written += converted.samples
                     if written > max_seconds * 16000:
-                        raise ValueError("Audio duration exceeds limit")
+                        raise VideoDurationExceeded("recording_duration_exceeded")
                     output.writeframes(converted.to_ndarray().tobytes())
             result["audio_present"] = written > 0
         else:
@@ -93,11 +101,14 @@ def decode(path, directory, media_type, max_seconds, interval):
 def extract_frames(path: Path, directory: Path, media_type: str, settings):
     env = {key: value for key, value in os.environ.items()
            if key.upper() in {"SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP"}}
-    subprocess.run([sys.executable, "-m", "cognitive_os.infrastructure.video",
+    result = subprocess.run([sys.executable, "-m", "cognitive_os.infrastructure.video",
                     str(path), str(directory), media_type,
                     str(settings.recording_max_seconds), str(settings.recording_frame_interval_seconds)],
-                   env=env, check=True, timeout=180, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   env=env, check=False, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+    if result.returncode == 42:
+        raise VideoDurationExceeded("recording_duration_exceeded")
+    result.check_returncode()
     return json.loads((directory / "sampling.json").read_text(encoding="utf-8"))
 
 
@@ -109,4 +120,7 @@ if __name__ == "__main__":
     parser.add_argument("max_seconds", type=int)
     parser.add_argument("interval", type=int)
     args = parser.parse_args()
-    decode(args.path, args.directory, args.media_type, args.max_seconds, args.interval)
+    try:
+        decode(args.path, args.directory, args.media_type, args.max_seconds, args.interval)
+    except VideoDurationExceeded:
+        sys.exit(42)

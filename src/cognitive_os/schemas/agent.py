@@ -18,6 +18,8 @@ class AgentInput(BaseModel):
     message_id: UUID
     text: str = Field(default="", max_length=5000)
     image_base64: str | None = Field(default=None, max_length=700000, repr=False)
+    offset_ms: int = Field(default=0, ge=0, le=1800000)
+    clarification_id: UUID | None = None
 
     @model_validator(mode="after")
     def needs_input(self):

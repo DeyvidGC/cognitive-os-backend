@@ -64,6 +64,7 @@ class LearningSession(Identified, Created, Base):
     organization_id: Mapped[UUID]
     author_id: Mapped[UUID]
     objective: Mapped[str]
+    procedure_id: Mapped[UUID | None]
     application_name: Mapped[str]
     status: Mapped[str] = mapped_column(default="capturing")
     consent_at: Mapped[datetime]
@@ -200,6 +201,8 @@ class Recording(Identified, Created, Base):
     blob_key: Mapped[str]
     blob_snapshot: Mapped[str | None]
     media_type: Mapped[str]
+    title: Mapped[str] = mapped_column(default="")
+    origin: Mapped[str] = mapped_column(default="screen_capture")
     size_bytes: Mapped[int]
     content_sha256: Mapped[str | None]
     audio_consent: Mapped[bool] = mapped_column(default=False)

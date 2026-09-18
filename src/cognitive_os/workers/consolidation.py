@@ -34,6 +34,9 @@ def set_stage(engine, claim, stage, progress):
 
 
 def classify_failure(exc, job):
+    from cognitive_os.infrastructure.video import VideoDurationExceeded
+    if isinstance(exc, VideoDurationExceeded):
+        return "recording_duration_exceeded", False
     if isinstance(exc, APIStatusError):
         if exc.status_code == 401:
             return "ai_authentication_failed", False
@@ -73,7 +76,7 @@ def mark_failed_session(db, job):
                                   Recording.organization_id == job.organization_id).with_for_update())
         if recording:
             recording.status = "failed"
-            recording.error_code = "recording_analysis_failed"
+            recording.error_code = job.last_error or "recording_analysis_failed"
 
 
 def claim_job(engine, lease_seconds=300, organization_id=None, kind="consolidate"):
@@ -147,12 +150,23 @@ def save_draft(engine, claim, draft, model_name):
             LearningSession.organization_id == claim.organization_id).with_for_update())
         if session is None or session.status != "processing" or job.version_id is not None:
             raise ValueError("Session or job cannot receive a draft")
-        procedure = Procedure(organization_id=claim.organization_id, title=draft.title,
-                              scope=session.objective)
-        db.add(procedure)
-        db.flush()
+        if session.procedure_id:
+            procedure = db.scalar(select(Procedure).where(
+                Procedure.id == session.procedure_id,
+                Procedure.organization_id == claim.organization_id).with_for_update())
+            if procedure is None:
+                raise ValueError("Procedure no longer available")
+        else:
+            procedure = Procedure(organization_id=claim.organization_id, title=draft.title,
+                                  scope=session.objective)
+            db.add(procedure)
+            db.flush()
+            session.procedure_id = procedure.id
+        number = db.scalar(select(func.max(ProcedureVersion.version_number)).where(
+            ProcedureVersion.organization_id == claim.organization_id,
+            ProcedureVersion.procedure_id == procedure.id)) or 0
         version = ProcedureVersion(organization_id=claim.organization_id, procedure_id=procedure.id,
-                                   source_session_id=session.id, version_number=1,
+                                   source_session_id=session.id, version_number=number + 1,
                                    summary=draft.summary, model_name=model_name,
                                    prompt_version=PROMPT_VERSION, status="draft")
         db.add(version)

@@ -12,6 +12,7 @@ class SessionCreate(BaseModel):
     objective: str = Field(min_length=1, max_length=4000)
     application_name: Name
     consent: Literal[True]
+    procedure_id: UUID | None = None
 
 
 class SessionResponse(BaseModel):
@@ -19,6 +20,7 @@ class SessionResponse(BaseModel):
     id: UUID
     organization_id: UUID
     author_id: UUID
+    procedure_id: UUID | None = None
     objective: str
     application_name: str
     status: str

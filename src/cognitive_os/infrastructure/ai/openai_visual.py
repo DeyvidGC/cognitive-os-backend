@@ -1,5 +1,8 @@
 import base64
 import json
+import wave
+from tempfile import TemporaryDirectory
+from pathlib import Path
 
 from cognitive_os.infrastructure.ai.openai_drafts import OpenAIDraftProvider
 from cognitive_os.schemas.recordings import VisualReportContent
@@ -13,11 +16,22 @@ class OpenAIVisualProvider(OpenAIDraftProvider):
         self.transcription_model = settings.openai_transcription_model
 
     def transcribe(self, path):
-        with path.open("rb") as audio:
-            response = self.client.audio.transcriptions.create(model=self.transcription_model, file=audio)
-        if not isinstance(response.text, str) or len(response.text) > 100000:
-            raise ValueError("Invalid or oversized transcription")
-        return response.text
+        # Ten minutes of mono PCM16/16kHz is under 20 MB per request.
+        parts = []
+        with wave.open(str(path), "rb") as source, TemporaryDirectory(prefix="cognitive-audio-") as temp:
+            while data := source.readframes(source.getframerate() * 600):
+                chunk = Path(temp) / "chunk.wav"
+                with wave.open(str(chunk), "wb") as output:
+                    output.setparams(source.getparams())
+                    output.writeframes(data)
+                with chunk.open("rb") as audio:
+                    response = self.client.audio.transcriptions.create(model=self.transcription_model, file=audio)
+                if not isinstance(response.text, str):
+                    raise ValueError("Invalid transcription")
+                parts.append(response.text)
+                if sum(map(len, parts)) > 100000:
+                    raise ValueError("Oversized transcription")
+        return "\n".join(parts)
 
     def analyze(self, objective, sampling, directory, context=None):
         content = [{"type": "input_text", "text": (

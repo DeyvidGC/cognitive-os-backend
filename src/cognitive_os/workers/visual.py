@@ -93,7 +93,7 @@ def save_report(engine, claim, report, sampling, model_name):
 
 
 def run_visual_once(engine, provider, settings, organization_id=None):
-    claim = claim_job(engine, settings.recording_lease_seconds, organization_id, "analyze_recording")
+    claim = claim_job(engine, max(1800, settings.recording_lease_seconds), organization_id, "analyze_recording")
     if claim is None:
         return False
     try:
@@ -115,10 +115,10 @@ def run_visual_once(engine, provider, settings, organization_id=None):
                 SessionEvent.organization_id == claim.organization_id, SessionEvent.session_id == session.id,
                 SessionEvent.event_type.in_(["message", "transcript"])).order_by(SessionEvent.sequence_number).limit(201)).all()
             turns = db.scalars(select(AgentTurn).where(AgentTurn.organization_id == claim.organization_id,
-                AgentTurn.session_id == session.id).order_by(AgentTurn.created_at).limit(121)).all()
+                AgentTurn.session_id == session.id).order_by(AgentTurn.created_at).limit(settings.agent_max_turns_per_session + 1)).all()
             answers = db.scalars(select(Clarification).where(Clarification.organization_id == claim.organization_id,
                 Clarification.session_id == session.id, Clarification.resolved_at.is_not(None)).limit(101)).all()
-            if len(notes) > 200 or len(turns) > 120 or len(answers) > 100:
+            if len(notes) > 200 or len(turns) > settings.agent_max_turns_per_session or len(answers) > 100:
                 raise ValueError("Too much context for visual analysis")
             context = {"notes": [e.payload.get("text", "") for e in notes] + [t.user_text for t in turns if t.user_text],
                        "clarifications": [{"question": a.question, "answer": a.answer} for a in answers]}

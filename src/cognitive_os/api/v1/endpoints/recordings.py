@@ -2,19 +2,19 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
-from sqlalchemy import select
+from sqlalchemy import select, or_, and_
 
 from cognitive_os.api.dependencies import CaptureMember as Member, Db
 from cognitive_os.application import recordings
 from cognitive_os.application.sessions import finish_session, get_session
 from cognitive_os.domain.errors import ApplicationError
-from cognitive_os.infrastructure.database.models import Job, Recording, ReportRevision
+from cognitive_os.infrastructure.database.models import Job, Recording, ReportRevision, RecordingReport, LearningSession
 from cognitive_os.infrastructure.storage.azure_recordings import recording_store
 from cognitive_os.schemas.recordings import (
     RecordingCreate, RecordingResponse, ReportEdit, ReportRegenerate, ReportResponse, ReportReview, SignedTransfer,
 )
 from cognitive_os.schemas.procedures import VersionResponse
-from cognitive_os.schemas.sessions import JobResponse
+from cognitive_os.schemas.sessions import JobResponse, SessionResponse
 
 router = APIRouter(tags=["recordings"])
 
@@ -32,8 +32,43 @@ def capabilities(request: Request, member: Member):
             "local_workers": workers.status() if workers else {},
             "model": settings.openai_model, "analysis_mode": "sampled_frames_after_upload",
             "audio_supported": True, "audio_consent_required": True, "max_recordings_per_session": 1,
+            "duration_scope": "session", "history_available": True,
+            "proactive_questions": True, "observation_interval_seconds": max(15, settings.agent_min_interval_seconds),
             "live_observation": "websocket_snapshots", "resumable_uploads": True,
             "transcription_model": settings.openai_transcription_model}
+
+
+@router.get("/recordings")
+def history(db: Db, member: Member, cursor: UUID | None = None,
+            limit: int = Query(25, ge=1, le=100), procedure_id: UUID | None = None,
+            status: str | None = Query(None, max_length=30), query: str = Query("", max_length=200)):
+    statement = select(Recording, LearningSession, RecordingReport).join(LearningSession,
+        and_(LearningSession.id == Recording.session_id,
+             LearningSession.organization_id == Recording.organization_id)).outerjoin(RecordingReport,
+        and_(RecordingReport.recording_id == Recording.id,
+             RecordingReport.organization_id == Recording.organization_id)).where(
+        Recording.organization_id == member.organization_id)
+    if procedure_id:
+        statement = statement.where(LearningSession.procedure_id == procedure_id)
+    if status:
+        statement = statement.where(Recording.status == status)
+    if query.strip():
+        statement = statement.where(or_(LearningSession.objective.icontains(query.strip(), autoescape=True),
+            LearningSession.application_name.icontains(query.strip(), autoescape=True),
+            Recording.title.icontains(query.strip(), autoescape=True)))
+    if cursor:
+        anchor = recordings.get_recording(db, member, cursor)
+        statement = statement.where(or_(Recording.created_at < anchor.created_at,
+            and_(Recording.created_at == anchor.created_at, Recording.id < anchor.id)))
+    rows = db.execute(statement.order_by(Recording.created_at.desc(), Recording.id.desc()).limit(limit + 1)).all()
+    return {"items": [{**RecordingResponse.model_validate(video).model_dump(mode="json"),
+                       "session": SessionResponse.model_validate(session).model_dump(mode="json"),
+                       "procedure_id": session.procedure_id,
+                       "duration_ms": report.sampling.get("duration_ms") if report else None,
+                       "revision": report.revision if report else None,
+                       "review_status": report.review_status if report else None}
+                      for video, session, report in rows[:limit]],
+            "next_cursor": str(rows[limit - 1][0].id) if len(rows) > limit else None}
 
 
 @router.post("/learning-sessions/{session_id}/recordings", response_model=RecordingResponse, status_code=201)
