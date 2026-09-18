@@ -7,12 +7,15 @@ from uuid import uuid4
 
 from PIL import Image
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cognitive_os.application.auth import authenticate
 from cognitive_os.application.sessions import get_session, require_session_writer
 from cognitive_os.domain.errors import ApplicationError
-from cognitive_os.infrastructure.database.models import AgentTurn, Membership, Clarification
+from cognitive_os.infrastructure.database.models import (
+    AgentTurn, Membership, Clarification, RealtimeVoiceSession, SessionEvent,
+)
 
 
 def authorize(db, token, organization_id, session_id):
@@ -45,6 +48,129 @@ def normalize_frame(value):
         return "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode("ascii")
     except Exception:
         raise ApplicationError(422, "Invalid screenshot; send a small JPEG or PNG as raw base64") from None
+
+
+def gate_and_persist_clarification(db, organization_id, session_id, question, offset_ms):
+    """Insert a new Clarification unless one is already open or it repeats a known question.
+
+    Shared by the turn-based reply path (handle_turn) and the realtime voice
+    path, so both enforce the same "one open question at a time" policy.
+    """
+    question = question.strip()[:4000]
+    if not question:
+        return None
+    existing = db.scalars(select(Clarification).where(
+        Clarification.organization_id == organization_id, Clarification.session_id == session_id)).all()
+    if any(item.resolved_at is None for item in existing):
+        return None
+    if question.casefold() in {item.question.strip().casefold() for item in existing}:
+        return None
+    created = Clarification(organization_id=organization_id, session_id=session_id, question=question)
+    db.add(created)
+    db.flush()
+    return created
+
+
+def start_voice_session(engine, token, organization_id, session_id, settings):
+    """Authorize and register a new realtime voice session.
+
+    Returns (voice_session_id, objective, next_sequence_number). The partial
+    unique index on realtime_voice_sessions(status='active') is what actually
+    enforces "one active session per LearningSession"; the concurrency count
+    below only bounds total OpenAI Realtime spend across all sessions.
+    """
+    with Session(engine) as db:
+        member, session = authorize(db, token, organization_id, session_id)
+        active = db.scalar(select(func.count()).select_from(RealtimeVoiceSession).where(
+            RealtimeVoiceSession.status == "active"))
+        if active is not None and active >= settings.realtime_max_concurrent_sessions:
+            raise ApplicationError(429, "Too many concurrent live voice sessions")
+        voice_session = RealtimeVoiceSession(organization_id=organization_id, session_id=session_id,
+                                             user_id=member.user_id, model=settings.openai_realtime_model,
+                                             started_at=datetime.now(UTC))
+        db.add(voice_session)
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise ApplicationError(409, "A live voice session is already active for this session") from exc
+        next_sequence = db.scalar(select(func.max(SessionEvent.sequence_number)).where(
+            SessionEvent.organization_id == organization_id, SessionEvent.session_id == session_id))
+        return voice_session.id, session.objective, (next_sequence + 1 if next_sequence is not None else 0)
+
+
+def end_voice_session(engine, voice_session_id, ended_reason):
+    with Session(engine) as db:
+        item = db.get(RealtimeVoiceSession, voice_session_id, with_for_update=True)
+        if item is not None and item.status == "active":
+            item.status = "failed" if ended_reason == "error" else "ended"
+            item.ended_reason = ended_reason
+            item.ended_at = datetime.now(UTC)
+            db.commit()
+
+
+def append_voice_transcript(engine, organization_id, session_id, voice_session_id,
+                            sequence_number, speaker, text, offset_ms):
+    """Persist one voice transcript segment as a backend-authored SessionEvent.
+
+    Uses a dedicated event_type (realtime_voice_transcript) so it never mixes
+    with the 'transcript' events a client can already submit, which the
+    analyze_recording worker folds into a different context key.
+    """
+    text = text.strip()[:5000]
+    if not text:
+        return
+    with Session(engine) as db:
+        event = SessionEvent(organization_id=organization_id, session_id=session_id,
+                             sequence_number=sequence_number,
+                             idempotency_key=f"realtime-voice:{voice_session_id}:{sequence_number}",
+                             event_type="realtime_voice_transcript",
+                             offset_ms=max(0, offset_ms), payload={"text": text, "speaker": speaker})
+        db.add(event)
+        voice_session = db.get(RealtimeVoiceSession, voice_session_id, with_for_update=True)
+        if voice_session is not None:
+            voice_session.transcript_event_count = (voice_session.transcript_event_count or 0) + 1
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+
+
+def check_live_status(engine, token, organization_id, session_id):
+    """Re-run the same authorization/status checks as a turn, discarding the result.
+
+    Used by the voice session's periodic reauth timer so a revoked token or a
+    session that stopped capturing ends the call promptly, without locking the
+    LearningSession row on every audio chunk in between.
+    """
+    with Session(engine) as db:
+        authorize(db, token, organization_id, session_id)
+
+
+def resolve_clarification(engine, token, organization_id, session_id, clarification_id, text):
+    text = text.strip()
+    if not text:
+        raise ApplicationError(422, "A clarification answer requires text")
+    with Session(engine) as db:
+        member, _ = authorize(db, token, organization_id, session_id)
+        question = db.scalar(select(Clarification).where(
+            Clarification.id == clarification_id, Clarification.organization_id == organization_id,
+            Clarification.session_id == session_id).with_for_update())
+        if question is None:
+            raise ApplicationError(404, "Clarification not found")
+        if question.resolved_at and question.answer != text:
+            raise ApplicationError(409, "Clarification was already answered")
+        question.answer = text
+        question.answered_by, question.resolved_at = member.user_id, datetime.now(UTC)
+        db.commit()
+
+
+def create_voice_clarification(engine, organization_id, session_id, question, offset_ms):
+    with Session(engine) as db, db.begin():
+        created = gate_and_persist_clarification(db, organization_id, session_id, question, offset_ms)
+        if created is None:
+            return None
+        return {"id": str(created.id), "question": created.question}
 
 
 def handle_turn(engine, token, organization_id, session_id, data, settings, provider):
@@ -118,25 +244,17 @@ def handle_turn(engine, token, organization_id, session_id, data, settings, prov
                 question.answer = data.text.strip()
                 question.answered_by, question.resolved_at = member.user_id, datetime.now(UTC)
             # The session lock serializes persistence across simultaneous sockets.
-            questions = db.scalars(select(Clarification).where(
-                Clarification.organization_id == organization_id,
-                Clarification.session_id == session_id)).all()
-            known = {q.question.strip().casefold() for q in questions}
-            pending = any(q.resolved_at is None for q in questions)
             reply["clarifications"] = []
             proposed = reply["questions"]
             reply["questions"] = []
-            if not pending:
-                for text in proposed:
-                    text = text.strip()[:4000]
-                    if text and text.casefold() not in known:
-                        question = Clarification(organization_id=organization_id, session_id=session_id, question=text)
-                        db.add(question)
-                        db.flush()
-                        reply["questions"] = [text]
-                        reply["clarifications"] = [{"type": "clarification.created", "event_id": str(question.id),
-                            "clarification_id": str(question.id), "question": text, "offset_ms": data.offset_ms}]
-                        break
+            for text in proposed:
+                created = gate_and_persist_clarification(db, organization_id, session_id, text, data.offset_ms)
+                if created:
+                    reply["questions"] = [created.question]
+                    reply["clarifications"] = [{"type": "clarification.created", "event_id": str(created.id),
+                        "clarification_id": str(created.id), "question": created.question,
+                        "offset_ms": data.offset_ms}]
+                    break
             turn.response, turn.status = reply, "completed"
             db.commit()
         return {"type": "reply", "message_id": str(data.message_id), "reply": reply}

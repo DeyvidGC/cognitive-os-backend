@@ -114,14 +114,24 @@ def run_visual_once(engine, provider, settings, organization_id=None):
             notes = db.scalars(select(SessionEvent).where(
                 SessionEvent.organization_id == claim.organization_id, SessionEvent.session_id == session.id,
                 SessionEvent.event_type.in_(["message", "transcript"])).order_by(SessionEvent.sequence_number).limit(201)).all()
+            voice_transcript = db.scalars(select(SessionEvent).where(
+                SessionEvent.organization_id == claim.organization_id, SessionEvent.session_id == session.id,
+                SessionEvent.event_type == "realtime_voice_transcript"
+            ).order_by(SessionEvent.sequence_number).limit(2001)).all()
             turns = db.scalars(select(AgentTurn).where(AgentTurn.organization_id == claim.organization_id,
                 AgentTurn.session_id == session.id).order_by(AgentTurn.created_at).limit(settings.agent_max_turns_per_session + 1)).all()
             answers = db.scalars(select(Clarification).where(Clarification.organization_id == claim.organization_id,
                 Clarification.session_id == session.id, Clarification.resolved_at.is_not(None)).limit(101)).all()
-            if len(notes) > 200 or len(turns) > settings.agent_max_turns_per_session or len(answers) > 100:
+            if (len(notes) > 200 or len(turns) > settings.agent_max_turns_per_session or len(answers) > 100
+                    or len(voice_transcript) > 2000):
                 raise ValueError("Too much context for visual analysis")
             context = {"notes": [e.payload.get("text", "") for e in notes] + [t.user_text for t in turns if t.user_text],
                        "clarifications": [{"question": a.question, "answer": a.answer} for a in answers]}
+            if voice_transcript:
+                # Live voice sessions already produced a transcript; skip re-transcribing
+                # the recording's own audio track once the frames are extracted below.
+                context["transcript"] = "\n".join(
+                    f"{e.payload.get('speaker', 'user')}: {e.payload.get('text', '')}" for e in voice_transcript)
         with TemporaryDirectory(prefix="cognitive-video-") as temp:
             directory = Path(temp)
             video = directory / ("capture.webm" if recording.media_type == "video/webm" else "capture.mp4")
@@ -130,7 +140,9 @@ def run_visual_once(engine, provider, settings, organization_id=None):
                 store.download(recording, video)
             set_stage(engine, claim, "extracting", 25)
             sampling = extract_frames(video, directory, recording.media_type, settings)
-            if sampling.get("audio_present") and recording.audio_consent:
+            if sampling.get("audio_present") and context.get("transcript"):
+                sampling["audio_exclusion_reason"] = "live_voice_transcript_available"
+            elif sampling.get("audio_present") and recording.audio_consent:
                 set_stage(engine, claim, "transcribing", 45)
                 context["transcript"] = provider.transcribe(directory / "audio.wav")
                 sampling["audio_analyzed"] = True

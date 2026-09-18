@@ -1,6 +1,6 @@
 # Video, conocimiento y base vectorial
 
-Estado 2026-09-16. [Flujo y endpoints](../guias/06-aprendizaje-visual.md).
+Estado 2026-09-18. [Flujo y endpoints](../guias/06-aprendizaje-visual.md).
 
 ## Que se guarda donde
 
@@ -11,7 +11,9 @@ Estado 2026-09-16. [Flujo y endpoints](../guias/06-aprendizaje-visual.md).
 | recording_reports | Resumen, informe, pasos, fotogramas/tiempos, transcripcion, revision y aprobacion | Fuente relacional del conocimiento |
 | recording_report_revisions | Instantaneas de revisiones anteriores | Trazabilidad de cambios |
 | agent_turns | Mensajes, respuestas e idempotencia | Conversacion recuperable; no imagenes en vivo |
-| clarifications | Preguntas y respuestas del usuario | Resolver ambiguedades |
+| clarifications | Preguntas y respuestas del usuario, incluidas las que el agente de voz pregunta por su cuenta | Resolver ambiguedades |
+| realtime_voice_sessions | Una fila por llamada de voz en vivo: modelo, estado, motivo y hora de cierre | Auditar/limitar sesiones Realtime concurrentes |
+| session_events (`realtime_voice_transcript`) | Segmentos de transcripcion de la llamada de voz, con hablante | Insumo del analisis visual sin volver a transcribir el video |
 | jobs | Trabajo, intentos, lease, error sanitizado | Reanudar procesamiento sin duplicar |
 | procedure_versions / steps / step_recording_evidence | Procedimiento y enlace a video/revision/fotogramas | Publicacion gobernada |
 | recording_vectors | Fragmento de informe aprobado + vector 1536 + fuente/modelo/revision | Busqueda semantica de videos |
@@ -73,7 +75,7 @@ FROM cognitive.recording_vectors
 ORDER BY created_at DESC LIMIT 20;
 ```
 
-Las migraciones 005/006/007 son aditivas y estan aplicadas en la base local.
+Las migraciones 005/006/007/010 son aditivas y estan aplicadas en la base local.
 El control multiempresa se aplica en consultas de la API y claves foraneas compuestas;
 no se debe exponer PostgreSQL directamente a usuarios finales como sustituto de RBAC.
 

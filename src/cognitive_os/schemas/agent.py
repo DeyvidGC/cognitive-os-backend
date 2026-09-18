@@ -33,3 +33,12 @@ class AgentReply(BaseModel):
     observation: str = Field(max_length=3000)
     answer: str = Field(max_length=3000)
     questions: list[str] = Field(max_length=5)
+
+
+class AgentVoiceInput(BaseModel):
+    """Text control frames on the live voice channel; audio travels as binary WS frames."""
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["frame", "clarification_answer", "end"]
+    image_base64: str | None = Field(default=None, max_length=700000, repr=False)
+    clarification_id: UUID | None = None
+    text: str = Field(default="", max_length=5000)

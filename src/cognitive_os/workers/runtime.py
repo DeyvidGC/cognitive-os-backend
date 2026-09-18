@@ -10,18 +10,26 @@ log = logging.getLogger(__name__)
 
 
 def worker_loop(settings, kind, stop):
-    from cognitive_os.infrastructure.ai.openai_drafts import OpenAIDraftProvider
-    from cognitive_os.infrastructure.ai.openai_embeddings import OpenAIEmbeddingProvider
-    from cognitive_os.infrastructure.ai.openai_visual import OpenAIVisualProvider
-    from cognitive_os.workers.consolidation import run_once
-    from cognitive_os.workers.recording_index import run_index_once
-    from cognitive_os.workers.visual import run_visual_once
-
-    provider = {"consolidate": OpenAIDraftProvider, "analyze_recording": OpenAIVisualProvider,
-                "index_recording": OpenAIEmbeddingProvider}[kind](settings)
-    engine = create_engine(settings.database_url.get_secret_value(), pool_pre_ping=True,
-                           hide_parameters=True, connect_args={"connect_timeout": 5})
     try:
+        from cognitive_os.infrastructure.ai.openai_drafts import OpenAIDraftProvider
+        from cognitive_os.infrastructure.ai.openai_embeddings import OpenAIEmbeddingProvider
+        from cognitive_os.infrastructure.ai.openai_visual import OpenAIVisualProvider
+        from cognitive_os.workers.consolidation import run_once
+        from cognitive_os.workers.recording_index import run_index_once
+        from cognitive_os.workers.visual import run_visual_once
+    except KeyboardInterrupt:
+        # Ctrl+C can land mid-import (e.g. inside the azure-core import chain)
+        # before the loop's own try/except below is even reached.
+        log.info("Worker %s stopping on interrupt", kind)
+        return
+
+    provider = None
+    engine = None
+    try:
+        provider = {"consolidate": OpenAIDraftProvider, "analyze_recording": OpenAIVisualProvider,
+                    "index_recording": OpenAIEmbeddingProvider}[kind](settings)
+        engine = create_engine(settings.database_url.get_secret_value(), pool_pre_ping=True,
+                               hide_parameters=True, connect_args={"connect_timeout": 5})
         while not stop.is_set():
             try:
                 if kind == "analyze_recording":
@@ -42,8 +50,10 @@ def worker_loop(settings, kind, stop):
         # LocalWorkers.close is already stopping us, so shut down quietly instead.
         log.info("Worker %s stopping on interrupt", kind)
     finally:
-        provider.close()
-        engine.dispose()
+        if provider is not None:
+            provider.close()
+        if engine is not None:
+            engine.dispose()
 
 
 class LocalWorkers:
