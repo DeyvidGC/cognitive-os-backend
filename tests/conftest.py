@@ -8,6 +8,11 @@ from cognitive_os.core.config import Settings
 from cognitive_os.main import create_app
 
 
+@pytest.fixture(autouse=True)
+def disable_real_workers(monkeypatch):
+    monkeypatch.setenv("COGNITIVE_EMBEDDED_WORKERS", "false")
+
+
 @pytest.fixture
 def api():
     url = os.environ.get("COGNITIVE_TEST_DATABASE_URL")

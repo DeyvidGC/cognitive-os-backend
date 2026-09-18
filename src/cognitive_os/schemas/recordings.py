@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class RecordingCreate(BaseModel):
@@ -41,12 +41,26 @@ class SignedTransfer(BaseModel):
     headers: dict[str, str]
 
 
+class StepTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    condition: str = Field(min_length=1, max_length=500)
+    target_step: int | None = Field(ge=1, le=50)
+
+
+class EvidenceStatement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=2000)
+    frame_indices: list[int] = Field(default_factory=list, max_length=122)
+    text_sources: list[Literal["transcript", "notes", "clarifications"]] = Field(default_factory=list)
+
+
 class VisualInstruction(BaseModel):
     model_config = ConfigDict(extra="forbid")
     instruction: str = Field(min_length=1, max_length=4000)
     expected_result: str = Field(min_length=1, max_length=2000)
-    frame_indices: list[int] = Field(max_length=61)
+    frame_indices: list[int] = Field(max_length=122)
     text_sources: list[Literal["transcript", "notes", "clarifications"]] = Field(default_factory=list)
+    alternatives: list[StepTransition] = Field(default_factory=list, max_length=5)
 
 
 class VisualReportContent(BaseModel):
@@ -57,6 +71,31 @@ class VisualReportContent(BaseModel):
     instructions: list[VisualInstruction] = Field(max_length=50)
     uncertainties: list[str] = Field(max_length=30)
     questions: list[str] = Field(default_factory=list, max_length=10)
+    prerequisites: list[EvidenceStatement] = Field(default_factory=list, max_length=20)
+    business_rules: list[EvidenceStatement] = Field(default_factory=list, max_length=20)
+    exceptions: list[EvidenceStatement] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_transitions(self):
+        count = len(self.instructions)
+        reached = {1} if count else set()
+        for number, step in enumerate(self.instructions, 1):
+            if number not in reached:
+                raise ValueError("Every step must be reachable from the start")
+            if step.alternatives:
+                if len(step.alternatives) < 2:
+                    raise ValueError("A decision requires at least two explicit alternatives")
+                conditions = [item.condition.strip().casefold() for item in step.alternatives]
+                if len(set(conditions)) != len(conditions) or not all(conditions):
+                    raise ValueError("Alternative conditions must be nonempty and distinct")
+                for item in step.alternatives:
+                    if item.target_step is not None:
+                        if not number < item.target_step <= count:
+                            raise ValueError("Alternatives must target a later existing step or null for end")
+                        reached.add(item.target_step)
+            elif number < count:
+                reached.add(number + 1)
+        return self
 
 
 class ReportResponse(BaseModel):

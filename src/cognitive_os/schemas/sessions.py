@@ -56,6 +56,11 @@ class JobResponse(BaseModel):
     recording_id: UUID | None
     kind: str
     status: str
+    stage: str
+    progress_percent: int
+    last_error: str | None
+    available_at: datetime
+    max_attempts: int
     attempts: int
     created_at: datetime
     completed_at: datetime | None

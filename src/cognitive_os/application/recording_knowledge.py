@@ -19,6 +19,7 @@ def enqueue_index(db, recording, report, model, *, retry=False):
         db.add(job)
     elif retry and job.status == "failed":
         job.status, job.attempts = "pending", 0
+        job.stage, job.progress_percent = "queued", 0
         job.available_at = datetime.now(UTC)
         job.completed_at = job.locked_by = job.locked_until = job.last_error = None
     return job
@@ -28,8 +29,14 @@ def report_chunks(report):
     content = report.content
     parts = [(content["title"] + "\n" + content["summary"], {"kind": "summary", "frame_indices": []})]
     parts.append((content["report"], {"kind": "report", "frame_indices": []}))
+    for kind in ("prerequisites", "business_rules", "exceptions"):
+        for fact in content.get(kind, []):
+            parts.append((fact["text"], {"kind": kind, "frame_indices": fact["frame_indices"],
+                                        "text_sources": fact.get("text_sources", [])}))
     for index, step in enumerate(content["instructions"], 1):
-        parts.append((step["instruction"] + "\n" + step["expected_result"],
+        routes = "\n".join(f"{item['condition']}: {item['target_step'] or 'fin'}"
+                           for item in step.get("alternatives", []))
+        parts.append((step["instruction"] + "\n" + step["expected_result"] + "\n" + routes,
                       {"kind": "step", "step": index, "frame_indices": step["frame_indices"],
                        "text_sources": step.get("text_sources", [])}))
     # Character chunks stay below the embedding byte/token limit even with multibyte text.
@@ -62,21 +69,47 @@ def search_vectors(db, organization_id, model, vector, limit):
 
 
 def report_flow(report):
+    from cognitive_os.schemas.recordings import VisualReportContent
+    content = VisualReportContent.model_validate(report.content)
+    base = {"schema_version": 2, "recording_id": report.recording_id, "revision": report.revision,
+            "review_status": report.review_status, "title": content.title,
+            "uncertainties": content.uncertainties,
+            "prerequisites": [item.model_dump() for item in content.prerequisites],
+            "business_rules": [item.model_dump() for item in content.business_rules],
+            "exceptions": [item.model_dump() for item in content.exceptions],
+            "layout": {"direction": "TB", "node_width": 320, "gap": 70}}
+    if not content.instructions:
+        return {**base, "kind": "sequence", "nodes": [], "edges": [], "empty_reason": "insufficient_evidence"}
     nodes = [{"id": "start", "type": "input", "position": {"x": 0, "y": 0},
               "data": {"label": "Inicio"}}]
+    edges = [{"id": "edge-start", "source": "start", "target": "step-1"}]
     frames = report.sampling.get("frames", [])
-    for index, step in enumerate(report.content["instructions"], 1):
-        nodes.append({"id": f"step-{index}", "type": "default", "position": {"x": 0, "y": index * 160},
+    y = 140
+    for index, instruction in enumerate(content.instructions, 1):
+        step = instruction.model_dump()
+        evidence = [frames[i] for i in step["frame_indices"] if 0 <= i < len(frames)]
+        times = [frame["timestamp_ms"] for frame in evidence]
+        height = 70 + ((len(step["instruction"]) + 37) // 38) * 22
+        nodes.append({"id": f"step-{index}", "type": "default", "position": {"x": 0, "y": y},
                       "data": {"label": step["instruction"], "expected_result": step["expected_result"],
-                               "frame_indices": step["frame_indices"],
-                               "frames": [frames[i] for i in step["frame_indices"] if 0 <= i < len(frames)],
-                               "text_sources": step.get("text_sources", []),
+                               "step_number": index, "node_kind": "decision" if instruction.alternatives else "action",
+                               "frame_indices": step["frame_indices"], "frames": evidence,
+                               "text_sources": step["text_sources"], "suggested_height": height,
+                               "evidence_start_ms": min(times) if times else None,
+                               "evidence_end_ms": max(times) if times else None,
+                               "origin": "visual_and_text" if evidence and step["text_sources"] else
+                                         "visual" if evidence else "text",
                                "validation_status": report.review_status}})
-    nodes.append({"id": "end", "type": "output", "position": {"x": 0, "y": len(nodes) * 160},
+        y += height + 70
+        if instruction.alternatives:
+            for branch, alternative in enumerate(instruction.alternatives):
+                edges.append({"id": f"edge-{index}-{branch}", "source": f"step-{index}",
+                              "target": f"step-{alternative.target_step}" if alternative.target_step else "end",
+                              "label": alternative.condition, "data": {"kind": "conditional"}})
+        else:
+            edges.append({"id": f"edge-{index}", "source": f"step-{index}",
+                          "target": f"step-{index + 1}" if index < len(content.instructions) else "end"})
+    nodes.append({"id": "end", "type": "output", "position": {"x": 0, "y": y},
                   "data": {"label": "Fin"}})
-    edges = [{"id": f"edge-{i}", "source": nodes[i]["id"], "target": nodes[i + 1]["id"]}
-             for i in range(len(nodes) - 1)]
-    return {"schema_version": 1, "recording_id": report.recording_id, "revision": report.revision,
-            "review_status": report.review_status, "title": report.content["title"],
-            "kind": "sequence", "nodes": nodes, "edges": edges,
-            "uncertainties": report.content["uncertainties"]}
+    return {**base, "kind": "conditional" if any(step.alternatives for step in content.instructions) else "sequence",
+            "nodes": nodes, "edges": edges}

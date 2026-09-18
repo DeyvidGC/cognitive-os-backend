@@ -20,7 +20,7 @@ try {
     $started = $true
     & "$PgBin/createdb.exe" -h 127.0.0.1 -p $testPort -U postgres cognitive
     if ($LASTEXITCODE -ne 0) { throw 'Test database creation failed' }
-    & "$PgBin/psql.exe" -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -p $testPort -U postgres -d cognitive -f migrations/001_initial.sql -f migrations/002_pgvector.sql -f migrations/004_local_auth.sql -f migrations/005_recordings.sql -f migrations/006_interactive_learning.sql -f migrations/007_recording_vectors.sql
+    & "$PgBin/psql.exe" -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -p $testPort -U postgres -d cognitive -f migrations/001_initial.sql -f migrations/002_pgvector.sql -f migrations/004_local_auth.sql -f migrations/005_recordings.sql -f migrations/006_interactive_learning.sql -f migrations/007_recording_vectors.sql -f migrations/008_job_progress.sql
     if ($LASTEXITCODE -ne 0) { throw 'Test migrations failed' }
     $env:COGNITIVE_TEST_DATABASE_URL = "postgresql+psycopg://postgres@127.0.0.1:$testPort/cognitive"
     & .venv/Scripts/python.exe -m pytest -q

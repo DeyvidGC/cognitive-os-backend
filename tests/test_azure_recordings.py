@@ -65,5 +65,11 @@ def test_resumable_blocks_require_complete_manifest(azure):
     with pytest.raises(ApplicationError):
         store.commit_blocks(recording)
     expected = status["blocks"][0]
-    blob.get_block_list.return_value = ([], [SimpleNamespace(id=expected["id"], size=100)])
+    # Azure's Python SDK decodes block IDs from base64 on get_block_list.
+    blob.get_block_list.return_value = ([], [SimpleNamespace(id=expected["raw_id"], size=100)])
     assert store.upload_status(recording)["blocks"][0]["uploaded"] is True
+    blob.get_blob_properties.return_value = SimpleNamespace(size=100, blob_type="BlockBlob", etag="etag",
+        content_settings=SimpleNamespace(content_type="video/mp4"))
+    blob.create_snapshot.return_value = {"snapshot": "snapshot2"}
+    assert store.commit_blocks(recording) == "snapshot2"
+    assert blob.commit_block_list.call_args.args[0][0].id == expected["raw_id"]

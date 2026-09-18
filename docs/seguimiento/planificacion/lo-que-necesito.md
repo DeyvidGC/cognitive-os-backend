@@ -1,5 +1,10 @@
 # Lo que falta y lo que necesito de ti
 
+Actualizacion 2026-09-17: las claves de OpenAI y Azure ya estan configuradas y
+verificadas. Se comprobaron analisis, transcripcion e indice reales; no falta otra
+key para este flujo. [Estado y pendientes actuales](../guias/09-procesamiento-y-grafo-v2.md).
+El listado inferior conserva el corte anterior.
+
 Actualizado: 2026-09-16. [Guia operativa](../guias/06-aprendizaje-visual.md) |
 [Backlog de esta entrega](entrega-visual.md).
 

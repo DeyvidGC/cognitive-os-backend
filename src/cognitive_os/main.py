@@ -22,9 +22,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             engine = create_engine(settings.database_url.get_secret_value(), pool_pre_ping=True,
                                    hide_parameters=True, connect_args={"connect_timeout": 5})
         application.state.engine = engine
+        workers = None
         try:
+            if settings.embedded_workers:
+                from cognitive_os.workers.runtime import LocalWorkers
+                workers = LocalWorkers(settings)
+                application.state.workers = workers
+                workers.start()
             yield
         finally:
+            if workers is not None:
+                workers.close()
             if engine is not None:
                 engine.dispose()
 
@@ -36,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                    allow_credentials=False)
     application.state.settings = settings
     application.state.engine = None
+    application.state.workers = None
     application.state.auth_limiter = AuthRateLimiter()
     application.include_router(api_router, prefix="/api/v1")
 

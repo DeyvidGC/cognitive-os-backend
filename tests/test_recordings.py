@@ -105,6 +105,44 @@ def prepare_report(api, owner, storage, provider=None):
     return session_id, recording_id, report.json()
 
 
+def test_document_export_access_revision_and_clarifications(api, account, storage, monkeypatch):
+    owner = account()
+    provider = Provider()
+    provider.questions = ["Que dato revisar?"]
+    session_id, recording_id, report = prepare_report(api, owner, storage, provider)
+    path = f"/api/v1/recordings/{recording_id}"
+    data = {"revision": report["revision"], "format": "docx", "style": "tutorial"}
+    endpoint = path + "/report/file"
+    assert api.post(endpoint, headers=account()["headers"], json=data).status_code == 404
+    reader = account(role="reader", organization_id=owner["organization_id"])
+    assert api.post(endpoint, headers=reader["headers"], json=data).status_code == 403
+    assert api.post(endpoint, headers=owner["headers"], json={**data, "revision": 999}).status_code == 409
+    assert api.post(endpoint, headers=owner["headers"], json=data).status_code == 409
+    question_path = f"/api/v1/learning-sessions/{session_id}/clarifications"
+    question = api.get(question_path, headers=owner["headers"]).json()[0]
+    assert api.put(question_path + f"/{question['id']}/answer", headers=owner["headers"],
+                   json={"answer": "Revisar el nombre completo."}).status_code == 200
+    storage.ensure_private = lambda: None
+    @contextmanager
+    def factory(settings):
+        yield storage
+    monkeypatch.setattr("cognitive_os.application.report_exports.recording_store", factory)
+    response = api.post(endpoint, headers=owner["headers"], json=data)
+    assert response.status_code == 200, response.text
+    assert response.content.startswith(b"PK")
+    assert response.headers["cache-control"] == "no-store"
+    assert ".docx" in response.headers["content-disposition"]
+    from io import BytesIO
+    from zipfile import ZipFile
+    with ZipFile(BytesIO(response.content)) as document:
+        assert "Revisar el nombre completo." in document.read("word/document.xml").decode()
+        assert any(name.startswith("word/media/") for name in document.namelist())
+    bpmn = api.get(path + "/flow/bpmn", headers=owner["headers"])
+    assert bpmn.status_code == 200
+    assert "userTask" in bpmn.json()["xml"]
+    assert api.get(path + "/flow/bpmn", headers=reader["headers"]).status_code == 403
+
+
 def test_reservation_completion_and_access(api, account, storage):
     owner, outsider = account(), account()
     session_id, recording_id, data = create(api, owner)
@@ -200,6 +238,8 @@ def test_decoder_rejects_invalid_video_and_reads_real_frames(tmp_path, video_fil
     settings = Settings(_env_file=None)
     sampling = extract_frames(video_file, tmp_path, "video/mp4", settings)
     assert sampling["decoded_frame_count"] == 3
+    assert sampling["includes_final_frame"] is True
+    assert sampling["frames"][-1]["timestamp_ms"] == 2000
     assert sampling["audio_present"] is False
     invalid = tmp_path / "bad.mp4"
     invalid.write_bytes(b"not video")

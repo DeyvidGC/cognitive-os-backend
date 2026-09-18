@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from cognitive_os.application.recording_knowledge import report_chunks
 from cognitive_os.infrastructure.ai.openai_embeddings import validate_vectors
 from cognitive_os.infrastructure.database.models import RecordingReport
-from cognitive_os.workers.consolidation import claim_job, fail_claim, owned_job
+from cognitive_os.workers.consolidation import claim_job, fail_claim, owned_job, set_stage
 
 
 def run_index_once(engine, provider, organization_id=None):
@@ -25,6 +25,7 @@ def run_index_once(engine, provider, organization_id=None):
             if job.idempotency_key != expected:
                 raise ValueError("Worker model differs from queued index model")
             chunks = report_chunks(report)
+        set_stage(engine, claim, "embedding", 30)
         vectors = validate_vectors(provider.embed([chunk["content"] for chunk in chunks]), len(chunks))
         with Session(engine) as db, db.begin():
             job = owned_job(db, claim)
@@ -44,8 +45,9 @@ def run_index_once(engine, provider, organization_id=None):
                     {**params, "position": position, "content": chunk["content"],
                      "source": json.dumps(chunk["source"]), "embedding": json.dumps(vector)})
             job.status = "completed"
+            job.stage, job.progress_percent = "completed", 100
             job.completed_at = db.scalar(select(func.clock_timestamp()))
             job.locked_by = job.locked_until = job.last_error = None
-    except Exception:
-        fail_claim(engine, claim)
+    except Exception as exc:
+        fail_claim(engine, claim, exc)
     return True

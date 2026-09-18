@@ -90,6 +90,8 @@ class Job(Identified, Created, Base):
     recording_id: Mapped[UUID | None]
     kind: Mapped[str]
     status: Mapped[str] = mapped_column(default="pending")
+    stage: Mapped[str] = mapped_column(default="queued")
+    progress_percent: Mapped[int] = mapped_column(default=0)
     idempotency_key: Mapped[str]
     attempts: Mapped[int] = mapped_column(default=0)
     max_attempts: Mapped[int] = mapped_column(default=3)

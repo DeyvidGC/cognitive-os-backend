@@ -6,7 +6,7 @@ import math
 
 from azure.core import MatchConditions
 from azure.core.exceptions import AzureError, ResourceNotFoundError
-from azure.storage.blob import BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas
+from azure.storage.blob import BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas,BlobBlock
 
 from cognitive_os.domain.errors import ApplicationError
 
@@ -83,30 +83,99 @@ class AzureRecordingStore:
             raise ValueError("Recording content hash mismatch")
 
     def upload_status(self, recording):
-        blob = self.service.get_blob_client(self.container, recording.blob_key)
+        blob = self.service.get_blob_client(
+            self.container,
+            recording.blob_key,
+        )
+
         try:
-            committed, uncommitted = blob.get_block_list(block_list_type="all")
+            committed, uncommitted = blob.get_block_list(
+                block_list_type="all"
+            )
         except ResourceNotFoundError:
             committed, uncommitted = [], []
-        present = {item.id: item.size for item in [*committed, *uncommitted]}
+
+        present = {
+            item.id: item.size
+            for item in [*committed, *uncommitted]
+        }
+
         blocks = []
-        for index in range(math.ceil(recording.size_bytes / self.block_size)):
-            block_id = base64.b64encode(f"{recording.id.hex}:{index:08d}".encode()).decode()
-            expected = min(self.block_size, recording.size_bytes - index * self.block_size)
-            blocks.append({"index": index, "id": block_id, "size_bytes": expected,
-                           "uploaded": present.get(block_id) == expected})
-        return {"recording_id": str(recording.id), "block_size_bytes": self.block_size,
-                "content_sha256": recording.content_sha256, "blocks": blocks}
+
+        total_blocks = math.ceil(
+            recording.size_bytes / self.block_size
+        )
+
+        for index in range(total_blocks):
+            raw_block_id = (
+                f"{recording.id.hex}:{index:08d}"
+            )
+
+            encoded_block_id = base64.b64encode(
+                raw_block_id.encode()
+            ).decode()
+
+            expected = min(
+                self.block_size,
+                recording.size_bytes
+                - index * self.block_size,
+            )
+
+            blocks.append({
+                "index": index,
+                "id": encoded_block_id,
+                "raw_id": raw_block_id,
+                "size_bytes": expected,
+                "uploaded": present.get(raw_block_id) == expected,
+            })
+
+        return {
+            "recording_id": str(recording.id),
+            "block_size_bytes": self.block_size,
+            "content_sha256": recording.content_sha256,
+            "blocks": blocks,
+        }
 
     def commit_blocks(self, recording):
         if not recording.content_sha256:
-            raise ApplicationError(409, "Resumable uploads require content_sha256 in the reservation")
+            raise ApplicationError(
+                409,
+                "Resumable uploads require content_sha256 in the reservation"
+            )
+
         status = self.upload_status(recording)
-        if not all(block["uploaded"] for block in status["blocks"]):
-            raise ApplicationError(409, "Upload all expected blocks before committing")
-        blob = self.service.get_blob_client(self.container, recording.blob_key)
-        blob.commit_block_list([block["id"] for block in status["blocks"]],
-                               content_settings=ContentSettings(content_type=recording.media_type))
+
+        missing_blocks = [
+            block
+            for block in status["blocks"]
+            if not block["uploaded"]
+        ]
+
+        if missing_blocks:
+            raise ApplicationError(
+                409,
+                f"Missing blocks: {[b['id'] for b in missing_blocks]}"
+            )
+
+        blob = self.service.get_blob_client(
+            self.container,
+            recording.blob_key
+        )
+
+        block_list = [
+            BlobBlock(
+                block_id=f"{recording.id.hex}:{block['index']:08d}"
+            )
+            for block in status["blocks"]
+        ]
+
+        blob.commit_block_list(
+            block_list,
+            content_settings=ContentSettings(
+                content_type=recording.media_type
+            ),
+        )
+
         return self.freeze(recording)
 
     def close(self):
@@ -122,5 +191,5 @@ def recording_store(settings):
     except AzureError:
         raise ApplicationError(503, "Recording storage unavailable or upload incomplete") from None
     finally:
-        if store is not None:
+        if store is not     None:
             store.close()

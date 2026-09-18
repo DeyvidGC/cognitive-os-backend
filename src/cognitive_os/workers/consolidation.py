@@ -1,12 +1,16 @@
 """PostgreSQL job leases and atomic draft persistence, without network calls in transactions."""
 
 import json
+import logging
+import subprocess
 from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
+from openai import APIStatusError, APIConnectionError, APITimeoutError
+from cognitive_os.domain.errors import ApplicationError
 
 from cognitive_os.application.orchestration import PROMPT_VERSION, build_draft_graph
 from cognitive_os.infrastructure.database.models import (
@@ -21,6 +25,39 @@ class Claim:
     session_id: UUID
     token: str
     recording_id: UUID | None = None
+
+
+def set_stage(engine, claim, stage, progress):
+    with Session(engine) as db, db.begin():
+        job = owned_job(db, claim)
+        job.stage, job.progress_percent = stage, progress
+
+
+def classify_failure(exc, job):
+    if isinstance(exc, APIStatusError):
+        if exc.status_code == 401:
+            return "ai_authentication_failed", False
+        if exc.status_code in {403, 404}:
+            return "ai_model_access_denied", False
+        if exc.status_code == 429:
+            if getattr(exc, "code", None) == "insufficient_quota":
+                return "ai_quota_exhausted", False
+            return "ai_rate_limited", True
+        if exc.status_code == 400:
+            return "ai_request_rejected", False
+        return "ai_service_unavailable", True
+    if isinstance(exc, (APIConnectionError, APITimeoutError)):
+        return "ai_connection_failed", True
+    if isinstance(exc, (subprocess.CalledProcessError, subprocess.TimeoutExpired)):
+        return "video_decode_failed", False
+    if isinstance(exc, ApplicationError) and job.stage == "downloading":
+        return "storage_unavailable", True
+    if isinstance(exc, ValueError) and job.stage == "downloading":
+        return "recording_integrity_failed", False
+    if isinstance(exc, ValueError) and job.stage in {"analyzing", "validating"}:
+        return "analysis_validation_failed", True
+    return ("recording_index_failed" if job.kind == "index_recording" else
+            "recording_analysis_failed" if job.recording_id else "consolidation_failed"), True
 
 
 def mark_failed_session(db, job):
@@ -55,6 +92,7 @@ def claim_job(engine, lease_seconds=300, organization_id=None, kind="consolidate
             return None
         if job.attempts >= job.max_attempts:
             job.status = "failed"
+            job.stage = "failed"
             job.last_error = "attempts_exhausted"
             job.completed_at = now
             job.locked_by = job.locked_until = None
@@ -62,6 +100,7 @@ def claim_job(engine, lease_seconds=300, organization_id=None, kind="consolidate
             return None
         token = uuid4().hex
         job.status = "running"
+        job.stage, job.progress_percent = "starting", 1
         job.attempts += 1
         job.locked_by = token
         job.locked_until = now + timedelta(seconds=lease_seconds)
@@ -137,13 +176,14 @@ def save_draft(engine, claim, draft, model_name):
                                                          "source_event_ids_by_step": sources}))
         job.version_id = version.id
         job.status = "completed"
+        job.stage, job.progress_percent = "completed", 100
         job.completed_at = db.scalar(select(func.clock_timestamp()))
         job.locked_until = job.locked_by = job.last_error = None
         session.status = "completed"
         return version.id
 
 
-def fail_claim(engine, claim):
+def fail_claim(engine, claim, exc=None):
     with Session(engine) as db, db.begin():
         try:
             job = owned_job(db, claim)
@@ -151,15 +191,17 @@ def fail_claim(engine, claim):
             return
         now = db.scalar(select(func.clock_timestamp()))
         # Never persist exception strings: SDK/DB errors may include sensitive input.
-        job.last_error = ("recording_index_failed" if job.kind == "index_recording" else
-                          "recording_analysis_failed" if job.recording_id else "consolidation_failed")
+        job.last_error, retryable = classify_failure(exc, job)
+        logging.getLogger(__name__).warning("Job %s failed: %s", job.id, job.last_error)
         job.locked_by = job.locked_until = None
-        if job.attempts >= job.max_attempts:
+        if not retryable or job.attempts >= job.max_attempts:
             job.status = "failed"
+            job.stage = "failed"
             job.completed_at = now
             mark_failed_session(db, job)
         else:
             job.status = "pending"
+            job.stage = "retry_wait"
             job.available_at = now + timedelta(seconds=min(300, 10 * 2 ** job.attempts))
             if job.recording_id and job.kind == "analyze_recording":
                 recording = db.scalar(select(Recording).where(Recording.id == job.recording_id,
@@ -177,6 +219,6 @@ def run_once(engine, provider, lease_seconds=300, organization_id=None):
         source = load_source(engine, claim)
         result = build_draft_graph(provider).invoke({"source": source})
         save_draft(engine, claim, result["draft"], provider.model_name)
-    except Exception:
-        fail_claim(engine, claim)
+    except Exception as exc:
+        fail_claim(engine, claim, exc)
     return True

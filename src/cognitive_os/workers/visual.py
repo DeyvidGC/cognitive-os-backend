@@ -15,7 +15,7 @@ from cognitive_os.infrastructure.database.models import (
 from cognitive_os.infrastructure.storage.azure_recordings import recording_store
 from cognitive_os.infrastructure.video import extract_frames
 from cognitive_os.schemas.recordings import VisualReportContent
-from cognitive_os.workers.consolidation import claim_job, fail_claim, owned_job
+from cognitive_os.workers.consolidation import claim_job, fail_claim, owned_job, set_stage
 
 
 class VisualState(TypedDict, total=False):
@@ -84,6 +84,7 @@ def save_report(engine, claim, report, sampling, model_name):
         recording.status, recording.error_code = "ready", None
         session.status = "completed"
         job.status = "completed"
+        job.stage, job.progress_percent = "completed", 100
         job.completed_at = db.scalar(select(func.clock_timestamp()))
         job.locked_by = job.locked_until = job.last_error = None
         db.add(AuditEvent(organization_id=claim.organization_id, actor_id=None,
@@ -124,10 +125,13 @@ def run_visual_once(engine, provider, settings, organization_id=None):
         with TemporaryDirectory(prefix="cognitive-video-") as temp:
             directory = Path(temp)
             video = directory / ("capture.webm" if recording.media_type == "video/webm" else "capture.mp4")
+            set_stage(engine, claim, "downloading", 10)
             with recording_store(settings) as store:
                 store.download(recording, video)
+            set_stage(engine, claim, "extracting", 25)
             sampling = extract_frames(video, directory, recording.media_type, settings)
             if sampling.get("audio_present") and recording.audio_consent:
+                set_stage(engine, claim, "transcribing", 45)
                 context["transcript"] = provider.transcribe(directory / "audio.wav")
                 sampling["audio_analyzed"] = True
                 sampling["transcript"] = context["transcript"]
@@ -137,8 +141,10 @@ def run_visual_once(engine, provider, settings, organization_id=None):
             if len(json.dumps(context).encode("utf-8")) > 200000:
                 raise ValueError("Analysis context exceeds limit")
             sampling["text_sources"] = [name for name, value in context.items() if value]
+            set_stage(engine, claim, "analyzing", 65)
             result = visual_graph(provider, directory).invoke({"objective": objective, "sampling": sampling, "context": context})
+            set_stage(engine, claim, "saving", 90)
             save_report(engine, claim, result["report"], sampling, provider.model_name)
-    except Exception:
-        fail_claim(engine, claim)
+    except Exception as exc:
+        fail_claim(engine, claim, exc)
     return True

@@ -18,6 +18,7 @@ def decode(path, directory, media_type, max_seconds, interval):
     last_timestamp = 0.0
     first_timestamp = None
     count = 0
+    last_frame = None
     with av.open(str(path), format="matroska" if media_type == "video/webm" else "mov",
                  options={"protocol_whitelist": "file", "enable_drefs": "0"}) as container:
         if len(container.streams.video) != 1:
@@ -28,6 +29,7 @@ def decode(path, directory, media_type, max_seconds, interval):
                 or stream.width * stream.height > 8_500_000):
             raise ValueError("Video resolution exceeds limit")
         for frame in container.decode(stream):
+            last_frame = frame
             count += 1
             if count > 72000 or frame.time is None or not math.isfinite(frame.time):
                 raise ValueError("Video decode limit or invalid timestamps")
@@ -41,7 +43,7 @@ def decode(path, directory, media_type, max_seconds, interval):
             last_timestamp = timestamp
             if timestamp + 0.001 < next_sample:
                 continue
-            if len(samples) >= 61:
+            if len(samples) >= 121:
                 raise ValueError("Too many sampled frames")
             filename = f"frame-{len(samples):03d}.jpg"
             image = frame.to_image()
@@ -51,9 +53,16 @@ def decode(path, directory, media_type, max_seconds, interval):
             next_sample += interval
     if not samples:
         raise ValueError("Video contains no decodable frames")
+    if round(last_timestamp * 1000) > samples[-1]["timestamp_ms"] + 250:
+        filename = f"frame-{len(samples):03d}.jpg"
+        image = last_frame.to_image()
+        image.thumbnail((1280, 720))
+        image.save(directory / filename, format="JPEG", quality=80)
+        samples.append({"index": len(samples), "timestamp_ms": round(last_timestamp * 1000), "file": filename})
     result = {"frames": samples, "duration_ms": round(last_timestamp * 1000),
               "frame_interval_seconds": interval, "audio_analyzed": False,
               "mode": "sampled_frames", "decoded_frame_count": count}
+    result["includes_final_frame"] = True
     with av.open(str(path), options={"protocol_whitelist": "file", "enable_drefs": "0"}) as container:
         if container.streams.audio:
             if len(container.streams.audio) > 1:

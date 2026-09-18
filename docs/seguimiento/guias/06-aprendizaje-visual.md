@@ -97,7 +97,8 @@ Esto no certifica reproduccion remota Azure ni todos los codecs/navegadores.
 Configurar CORS de Blob (distinto al CORS de FastAPI), una vez con credenciales:
 
 ```powershell
-.venv/Scripts/python.exe -m cognitive_os.infrastructure.storage.setup_azure --origin http://localhost:5173 --origin http://127.0.0.1:5173
+.venv/Scripts/python.exe -m cognitive_os.infrastructure.storage.setup_azure --origin http://localhost:5173
+.venv/Scripts/python.exe -m cognitive_os.infrastructure.storage.setup_azure --origin http://127.0.0.1:5173
 ```
 
 El comando crea el contenedor privado si falta y agrega reglas a la cuenta:

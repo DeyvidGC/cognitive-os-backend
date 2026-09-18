@@ -22,10 +22,14 @@ router = APIRouter(tags=["recordings"])
 @router.get("/recordings/capabilities")
 def capabilities(request: Request, member: Member):
     settings = request.app.state.settings
+    workers = request.app.state.workers
     return {"media_types": ["video/webm", "video/mp4"],
             "max_bytes": settings.recording_max_bytes, "max_seconds": settings.recording_max_seconds,
             "frame_interval_seconds": settings.recording_frame_interval_seconds,
             "storage_configured": bool(settings.azure_storage_connection_string),
+            "ai_configured": bool(settings.openai_api_key),
+            "worker_mode": "embedded" if settings.embedded_workers else "external",
+            "local_workers": workers.status() if workers else {},
             "model": settings.openai_model, "analysis_mode": "sampled_frames_after_upload",
             "audio_supported": True, "audio_consent_required": True, "max_recordings_per_session": 1,
             "live_observation": "websocket_snapshots", "resumable_uploads": True,
@@ -90,6 +94,7 @@ def retry(recording_id: UUID, db: Db, member: Member):
     session = get_session(db, member, item.session_id, for_update=True)
     item = recordings.get_recording(db, member, recording_id, lock=True)
     job.status = "pending"
+    job.stage, job.progress_percent = "queued", 0
     job.attempts = 0
     job.available_at = datetime.now(UTC)
     job.completed_at = job.last_error = job.locked_by = job.locked_until = None

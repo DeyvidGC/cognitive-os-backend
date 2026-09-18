@@ -1,5 +1,21 @@
 # Incremento de aprendizaje visual
 
+## Incremento documental: 2026-09-17
+
+- [x] PDF y Word con capturas del video, pasos, fuentes y aclaraciones resueltas.
+- [x] Diferenciar documento aprobado de borrador y bloquear preguntas pendientes.
+- [x] BPMN de actividades humanas, decisiones y descarga; visor integrado en front.
+- [x] PDF real revisado; pruebas de permisos y exportacion automatizadas.
+- [ ] Revisar paginacion DOCX en Word y probar importacion en Bizagi.
+- [ ] Sprint siguiente: exportaciones en cola y documentos persistidos en Blob.
+- [ ] Backlog: anonimizar capturas y editar BPMN con multiples responsables.
+
+[Contratos y limites](../guias/10-documentos-y-bpmn.md).
+
+Actualizacion 2026-09-17: workers automaticos locales, analisis/transcripcion/indice
+reales y CORS de Azure verificados. Grafo v2 con alternativas sustentadas y estados
+de procesamiento integrados en el frontend. [Detalle actual](../guias/09-procesamiento-y-grafo-v2.md).
+
 Fecha: 2026-09-16. Referencia: Plataforma_IA_Ensenanza_Producto_y_Roadmap.docx
 entregado por el usuario. Se priorizan Teaching Agent, conocimiento gobernado y
 recuperacion. No se implementan los prompts de diseno Figma del documento ni los

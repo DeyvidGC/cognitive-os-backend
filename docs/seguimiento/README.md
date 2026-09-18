@@ -1,8 +1,19 @@
 # Guia y seguimiento de Cognitive OS
 
+## Actualizacion 2026-09-17
+
+[Word/PDF con capturas y diagramas BPMN](guias/10-documentos-y-bpmn.md):
+contratos, pantallas, verificacion y limites de exportacion.
+
+[Procesamiento automatico, pruebas reales y grafo v2](guias/09-procesamiento-y-grafo-v2.md)
+| [Bitacora](bitacora/2026-09-17.md). Credenciales verificadas, workers integrados
+en desarrollo y flujo real de analisis/indexacion comprobado.
+
 ## Entrega vigente: 2026-09-16
 
 - [Flujo visual, configuracion y contratos frontend](guias/06-aprendizaje-visual.md).
+- [Mejoras del frontend por prioridad](guias/07-mejoras-frontend.md).
+- [Conectar Vercel con el backend local](guias/08-vercel-localhost.md).
 - [Video, tablas y uso de pgvector](base-de-datos/04-video-y-vectores.md).
 - [Checklist, backlog y sprints](planificacion/entrega-visual.md).
 - [Bitacora y pruebas](bitacora/2026-09-16.md).

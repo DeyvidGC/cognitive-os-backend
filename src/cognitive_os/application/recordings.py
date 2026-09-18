@@ -63,10 +63,11 @@ def get_report(db, member, recording_id, *, lock=False):
 
 def validate_sources(content, sampling):
     count = len(sampling["frames"])
-    if any(index < 0 or index >= count for step in content.instructions for index in step.frame_indices):
+    statements = [*content.instructions, *content.prerequisites, *content.business_rules, *content.exceptions]
+    if any(index < 0 or index >= count for step in statements for index in step.frame_indices):
         raise ApplicationError(422, "Report references an unknown sampled frame")
     available = set(sampling.get("text_sources", []))
-    for step in content.instructions:
+    for step in statements:
         if not step.frame_indices and not step.text_sources:
             raise ApplicationError(422, "Every instruction requires supporting sources")
         if not set(step.text_sources).issubset(available):
@@ -138,6 +139,7 @@ def regenerate(db, member, recording_id, revision):
         Clarification.session_id == session.id, Clarification.resolved_at.is_(None)).limit(1)):
         raise ApplicationError(409, "Resolve pending clarifications before regenerating")
     job.status, job.attempts = "pending", 0
+    job.stage, job.progress_percent = "queued", 0
     job.available_at = datetime.now(UTC)
     job.completed_at = job.locked_by = job.locked_until = job.last_error = None
     recording.status, recording.error_code, session.status = "queued", None, "processing"
@@ -166,6 +168,10 @@ def convert_to_procedure(db, member, recording_id):
     db.add(version)
     db.flush()
     tutorial = [f"# {content.title}", content.summary, content.report]
+    for heading, facts in (("Requisitos previos", content.prerequisites),
+                           ("Reglas de negocio", content.business_rules), ("Excepciones", content.exceptions)):
+        if facts:
+            tutorial.append("## " + heading + "\n" + "\n".join("- " + fact.text for fact in facts))
     for position, instruction in enumerate(content.instructions, 1):
         step = Step(organization_id=member.organization_id, version_id=version.id, position=position,
                     instruction=instruction.instruction, expected_result=instruction.expected_result,
@@ -177,6 +183,9 @@ def convert_to_procedure(db, member, recording_id):
                                      recording_id=recording.id, report_revision=report.revision,
                                      frame_indices=instruction.frame_indices))
         tutorial.append(f"## {position}. Paso\n{instruction.instruction}\n\n{instruction.expected_result}")
+        for alternative in instruction.alternatives:
+            target = f"paso {alternative.target_step}" if alternative.target_step else "fin"
+            tutorial.append(f"- {alternative.condition}: {target}")
     db.add(Tutorial(organization_id=member.organization_id, version_id=version.id,
                     format="markdown", content="\n\n".join(tutorial)))
     report.version_id = version.id
