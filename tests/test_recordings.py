@@ -296,3 +296,42 @@ def test_audio_and_notes_reach_visual_provider_with_consent(api, account, storag
     assert provider.last_context["notes"] == ["Nota complementaria"]
     report = api.get(path + "/report", headers=owner["headers"]).json()
     assert report["sampling"]["audio_analyzed"] is True
+
+
+def test_live_voice_transcript_skips_whisper_retranscription(api, account, storage, monkeypatch):
+    def frames(video, directory, media_type, settings):
+        (directory / "audio.wav").write_bytes(b"fake-wave-for-provider")
+        return {"frames": [{"index": 0, "timestamp_ms": 0, "file": "frame-0.jpg"}],
+                "audio_present": True, "audio_analyzed": False, "frame_interval_seconds": 10}
+    monkeypatch.setattr("cognitive_os.workers.visual.extract_frames", frames)
+    owner = account()
+    session_id, recording_id, _ = create(api, owner)
+    with Session(api.app.state.engine) as db, db.begin():
+        db.get(Recording, UUID(recording_id)).audio_consent = True
+        from cognitive_os.infrastructure.database.models import SessionEvent
+        db.add(SessionEvent(organization_id=UUID(owner["organization_id"]), session_id=UUID(session_id),
+                            sequence_number=0, idempotency_key="realtime-voice:test:0",
+                            event_type="realtime_voice_transcript", offset_ms=0,
+                            payload={"text": "Voy a llenar el nombre", "speaker": "user"}))
+        db.add(SessionEvent(organization_id=UUID(owner["organization_id"]), session_id=UUID(session_id),
+                            sequence_number=1, idempotency_key="realtime-voice:test:1",
+                            event_type="realtime_voice_transcript", offset_ms=1000,
+                            payload={"text": "Ese campo es el nombre completo", "speaker": "assistant"}))
+    path = f"/api/v1/recordings/{recording_id}"
+    api.post(path + "/complete", headers=owner["headers"])
+    api.post(path + "/process", headers=owner["headers"])
+
+    class TranscribingProvider(Provider):
+        transcribe_calls = 0
+        def transcribe(self, path):
+            type(self).transcribe_calls += 1
+            return "should not be used"
+
+    provider = TranscribingProvider()
+    run_video(api, owner, provider)
+    assert TranscribingProvider.transcribe_calls == 0
+    assert provider.last_context["transcript"] == (
+        "user: Voy a llenar el nombre\nassistant: Ese campo es el nombre completo")
+    report = api.get(path + "/report", headers=owner["headers"]).json()
+    assert report["sampling"]["audio_exclusion_reason"] == "live_voice_transcript_available"
+    assert "audio_analyzed" not in report["sampling"] or report["sampling"]["audio_analyzed"] is False

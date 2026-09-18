@@ -1,20 +1,23 @@
 # Aprendizaje visual: contrato backend y frontend
 
-Estado al 2026-09-16. Implementado y probado con PostgreSQL/pgvector reales aislados,
+Estado al 2026-09-18. Implementado y probado con PostgreSQL/pgvector reales aislados,
 video/audio locales y proveedores de IA/Azure simulados. No se hicieron llamadas
-reales de pago ni se valido una cuenta Azure. [Credenciales pendientes](../planificacion/lo-que-necesito.md).
+reales de pago ni se valido una cuenta Azure ni OpenAI Realtime. [Credenciales pendientes](../planificacion/lo-que-necesito.md).
 
 ## Flujo completo
 
 ```mermaid
 flowchart TD
   A[Sesion con consentimiento] --> B[Pantalla y conversacion por WebSocket]
+  A --> B2[Pantalla + voz bidireccional Realtime]
   A --> C[Grabar video y audio opcional en navegador]
+  B2 --> Q[Transcripcion y aclaraciones proactivas en vivo]
   C --> D[Reservar recording y obtener SAS]
   D --> E[Subir a Blob privado y confirmar snapshot]
   E --> F[Trabajo analyze_recording]
   F --> G[Extraer fotogramas y audio]
-  G --> H[Transcribir audio si existe consentimiento]
+  Q -.alimenta.-> H
+  G --> H[Transcribir audio si existe consentimiento y no hubo voz en vivo]
   H --> I[LangGraph: imagenes + transcripcion + notas + aclaraciones]
   I --> J[Informe, resumen, instrucciones y preguntas]
   J --> K[Usuario responde y corrige]
@@ -29,14 +32,19 @@ flowchart TD
 El modelo no recibe ni reproduce un archivo de video completo: recibe fotogramas
 muestreados cada 10 segundos, mas contexto textual. Puede perder acciones entre
 fotogramas. El informe conserva esta limitacion; no equivale a observar cada frame.
-La conversacion en vivo usa mensajes y capturas puntuales, no voz bidireccional ni
-streaming continuo de video/tokens. `gpt-5.6-luna` genera texto/vision;
-`gpt-4o-mini-transcribe` transcribe; `text-embedding-3-small` genera vectores.
+El canal `/agent/live` sigue siendo mensajes y capturas puntuales (sin voz). El
+canal `/agent/live-voice` agrega voz bidireccional real vía OpenAI Realtime API,
+capturas periodicas y preguntas proactivas del modelo, mediadas siempre por el
+backend (ver [ficha del endpoint](../endpoints/62-agent-live.md)). Ninguno de los
+dos transmite video continuo: la pantalla sigue llegando como capturas puntuales,
+no como stream de frames. `gpt-5.6-luna` genera texto/vision; `gpt-realtime`
+conversa por voz; `gpt-4o-mini-transcribe`/Whisper transcriben audio grabado;
+`text-embedding-3-small` genera vectores.
 
 ## Ejecutar
 
 Desde la raiz, instalar `pip install -e ".[dev]"` en `.venv`. Migraciones en orden:
-001, 002, 004, 005, 006, 007. No ejecutar `003_Query` como migracion.
+001, 002, 004, 005, 006, 007, 008, 009, 010. No ejecutar `003_Query` como migracion.
 La base local ya tiene estas migraciones; no repetirlas sobre tablas existentes.
 El script `scripts/test_postgres.ps1` crea otra base aislada y la apaga al terminar.
 
@@ -143,12 +151,28 @@ Mandar un turno a la vez y esperar reply/error:
 `type: "message"` tambien acepta texto sin imagen. Respuestas: `processing`,
 `reply` con `message_id` y campos del agente, o `error` con status/detail.
 Ver esquema exacto en [ficha WebSocket](../endpoints/62-agent-live.md).
-Limites: imagen JPEG/PNG de hasta 512 KB, maximo 1920x1080; 120 turnos/sesion,
-intervalo minimo 3 segundos; sesiones en captura y permiso de escritura.
-Reutilizar message_id con el mismo contenido para reintento; diferente contenido
-da 409. El historial se recupera por `GET /learning-sessions/{id}/agent/messages`.
-Las imagenes del canal en vivo no se guardan; el texto y la respuesta si.
-Vite necesita `ws: true` en proxy `/api` si el socket usa el dominio del frontend.
+Limites: imagen JPEG/PNG de hasta 512 KB, maximo 1920x1080; 240 turnos/sesion
+(`agent_max_turns_per_session`), intervalo minimo 3 segundos; sesiones en captura
+y permiso de escritura. Reutilizar message_id con el mismo contenido para
+reintento; diferente contenido da 409. El historial se recupera por
+`GET /learning-sessions/{id}/agent/messages`. Las imagenes del canal en vivo no
+se guardan; el texto y la respuesta si. Vite necesita `ws: true` en proxy `/api`
+si el socket usa el dominio del frontend.
+
+### Voz bidireccional (`/agent/live-voice`)
+
+Mismo primer paso de autenticacion, pero el protocolo es continuo, no por turnos:
+audio del microfono en tramas binarias, capturas de pantalla periodicas cada
+`observation_interval_seconds` (15s por defecto) en tramas de texto, y audio de
+respuesta (TTS) llegando tambien en tramas binarias. El modelo decide por su
+cuenta cuando preguntar algo (`ask_clarifying_question`, mapeada al mismo tool
+call de la Realtime API); esa pregunta llega como `clarification.created` sin
+que el usuario haya escrito nada, y se guarda como `Clarification` igual que hoy.
+Solo una sesion de voz activa por `learning_session`; una segunda conexion
+mientras la primera sigue abierta recibe 409. Duracion maxima configurable
+(`realtime_session_max_seconds`, 30 minutos por defecto); el servidor revalida
+la autorizacion periodicamente, no solo al conectar. Detalle completo, formato
+de audio y eventos en [ficha del endpoint](../endpoints/62-agent-live.md).
 
 ## Audio, notas, aclaraciones e informe
 
@@ -157,6 +181,15 @@ extrae WAV mono 16 kHz, transcribe y combina con eventos `message`/`transcript`,
 texto del usuario en turnos en vivo y aclaraciones resueltas. Las respuestas del
 agente no se usan como evidencia del usuario. No se inventa transcripcion cuando
 no hay audio o consentimiento. `GET /recordings/{id}/transcript` explica ese estado.
+
+Si la sesion tuvo una llamada de voz en vivo (`/agent/live-voice`), su
+transcripcion ya quedo guardada como eventos `realtime_voice_transcript` (no
+expuestos por `POST .../events`, distintos del `transcript` que puede enviar el
+cliente) y el worker `analyze_recording` la usa directamente como
+`context["transcript"]`: no vuelve a transcribir el audio del video grabado con
+Whisper, aunque haya `audio_consent`. El sampling del informe queda con
+`audio_exclusion_reason: "live_voice_transcript_available"` en ese caso, para
+distinguirlo de la falta de consentimiento.
 
 `GET /.../report` devuelve contenido, sampling, revision y estado de revision.
 Las instrucciones contienen `frame_indices` y `text_sources` (transcript, notes,
@@ -191,6 +224,11 @@ condicionales; edicion de ramas y reglas de negocio queda en el backlog.
   detener al ocultar/cerrar sesion. El arreglo del reproductor ya fue aplicado.
 - `AgentConversation`: canal live, historial, reintentos por message_id y errores
   401/403/409/429/503 sin duplicar notas.
+- Nuevo: captura de microfono + reproduccion de audio TTS para `/agent/live-voice`
+  (tramas binarias PCM16), reenvio de las mismas capturas periodicas de pantalla
+  que `ScreenStudio` ya toma, UI para preguntas empujadas sin que el usuario haya
+  escrito nada (`clarification.created`) y manejo de `session.ending` para cortar
+  el microfono con la razon visible al usuario.
 - `RecordingUploadPanel`/`recordings.ts`: hash, bloques y recuperacion de reserva.
 - `SessionMedia`: renovar playback vencido y mostrar MediaError.code; probar CORS
   y codec en navegador objetivo con el video real.

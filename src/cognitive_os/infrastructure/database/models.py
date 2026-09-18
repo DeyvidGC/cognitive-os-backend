@@ -246,6 +246,20 @@ class StepRecordingEvidence(Base):
     frame_indices: Mapped[list] = mapped_column(JSONB)
 
 
+class RealtimeVoiceSession(Identified, Created, Base):
+    __tablename__ = "realtime_voice_sessions"
+    organization_id: Mapped[UUID]
+    session_id: Mapped[UUID]
+    user_id: Mapped[UUID]
+    model: Mapped[str]
+    status: Mapped[str] = mapped_column(default="active")
+    ended_reason: Mapped[str | None]
+    started_at: Mapped[datetime]
+    ended_at: Mapped[datetime | None]
+    transcript_event_count: Mapped[int] = mapped_column(default=0)
+    clarifications_created: Mapped[int] = mapped_column(default=0)
+
+
 class AgentTurn(Identified, Created, Base):
     __tablename__ = "agent_turns"
     organization_id: Mapped[UUID]

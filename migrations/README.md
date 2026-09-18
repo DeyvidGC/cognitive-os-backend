@@ -28,13 +28,19 @@ Si una ejecucion falla, ejecutar `ROLLBACK` antes de corregirla y reintentar.
   `learning_sessions` y `title` y `origin` a `recordings`. Es aditiva y conserva
   los datos. Sin ella, listar sesiones falla con 503 aunque el resto de la API
   responda con normalidad, porque el modelo ya mapea esas columnas.
+- `010_realtime_voice.sql`: requiere 001 y 006; agrega `realtime_voice_sessions`
+  (una sesion de voz en vivo activa por `learning_session`, via indice unico
+  parcial) y el tipo de evento `realtime_voice_transcript` en `session_events`,
+  separado del `transcript` que ya podia enviar el cliente. Sin ella, el agente
+  de voz en vivo no puede persistir sesiones ni transcripcion.
 
-Las ocho son obligatorias: `cognitive_os.infrastructure.database.migrations`
+Las nueve son obligatorias: `cognitive_os.infrastructure.database.migrations`
 las declara en `REQUIRED_MIGRATIONS` y `GET /api/v1/health/ready` nombra las que
 falten. Al agregar una migracion, agregarla tambien a esa tupla y a
 `scripts/test_postgres.ps1`.
 
-Estado 2026-09-18: 001, 002, 004, 005, 006, 007, 008 y 009 aplicadas en cognitive local.
+Estado 2026-09-18: 001, 002, 004, 005, 006, 007, 008 y 009 aplicadas en cognitive local;
+010 pendiente de aplicar.
 La generacion/vectorizacion se ejecuta con workers separados, no al migrar.
 
 Se empieza con busqueda vectorial exacta. Un indice HNSW se puede agregar cuando

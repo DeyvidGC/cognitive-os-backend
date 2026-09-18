@@ -22,6 +22,7 @@ REQUIRED_MIGRATIONS = (
     "007_recording_vectors",
     "008_job_progress",
     "009_periodic_learning",
+    "010_realtime_voice",
 )
 
 

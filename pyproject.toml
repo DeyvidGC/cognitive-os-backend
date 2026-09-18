@@ -18,6 +18,7 @@ dependencies = [
     "python-multipart>=0.0.20,<1.0",
     "pillow>=11,<13",
     "openai>=2,<3",
+    "websockets>=13,<17",
     "langgraph>=1,<2",
     "azure-storage-blob>=12.25,<13",
     "av>=14,<17",
