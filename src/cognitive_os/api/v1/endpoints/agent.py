@@ -93,8 +93,14 @@ async def _voice_outbound(socket, realtime, engine, organization_id, session_id,
                 await socket.send_json({"type": "clarification.created", "clarification_id": created["id"],
                                         "question": created["question"]})
         elif kind == "error":
-            logger.warning("Realtime provider reported an error event for session %s", session_id)
+            # OpenAI's error payload can include free-text detail; log it for our own
+            # debugging but never forward it to the client verbatim.
+            logger.warning("Realtime provider reported an error event for session %s: %s",
+                           session_id, event.get("error") or event)
             await socket.send_json({"type": "error", "status": 503, "detail": "Realtime provider reported an error"})
+            # The call is no longer usable once the provider errors; end it now instead
+            # of leaving the session idle until the client notices and disconnects.
+            raise _VoiceSessionEnd("error")
 
 
 async def _voice_reauth(engine, token, organization_id, session_id, settings):
@@ -186,7 +192,7 @@ async def live(session_id: UUID, socket: WebSocket):
             provider.close()
         try:
             await socket.close()
-        except RuntimeError:
+        except (RuntimeError, WebSocketDisconnect):
             pass
 
 
@@ -261,5 +267,5 @@ async def live_voice(session_id: UUID, socket: WebSocket):
             await asyncio.to_thread(end_voice_session, engine, voice_session_id, ended_reason)
         try:
             await socket.close()
-        except RuntimeError:
+        except (RuntimeError, WebSocketDisconnect):
             pass

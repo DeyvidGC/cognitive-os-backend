@@ -142,6 +142,24 @@ class FakeRealtimeWithToolCall(FakeRealtime):
                "arguments": json.dumps({"question": "Que campo debo llenar?"})}
 
 
+class FakeRealtimeWithError(FakeRealtime):
+    async def events(self):
+        yield {"type": "error", "error": {"message": "boom"}}
+
+
+def test_live_voice_provider_error_ends_the_call(api, account, monkeypatch):
+    monkeypatch.setattr("cognitive_os.api.v1.endpoints.agent.OpenAIRealtimeSession", FakeRealtimeWithError)
+    owner = account()
+    session_id = session(api, owner)
+    with api.websocket_connect(f"/api/v1/learning-sessions/{session_id}/agent/live-voice") as ws:
+        ws.send_json({"type": "auth", "token": owner["token"], "organization_id": owner["organization_id"], "consent": True})
+        assert ws.receive_json()["type"] == "ready"
+        error = ws.receive_json()
+        assert error["type"] == "error" and error["status"] == 503
+        ending = ws.receive_json()
+        assert ending == {"type": "session.ending", "reason": "error"}
+
+
 def test_live_voice_forwards_audio_frame_and_creates_clarification(api, account, monkeypatch):
     created = {}
 
