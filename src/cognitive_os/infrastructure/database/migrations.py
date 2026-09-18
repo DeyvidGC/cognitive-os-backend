@@ -21,6 +21,7 @@ REQUIRED_MIGRATIONS = (
     "006_interactive_learning",
     "007_recording_vectors",
     "008_job_progress",
+    "009_periodic_learning",
 )
 
 

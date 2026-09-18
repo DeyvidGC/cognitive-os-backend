@@ -60,11 +60,12 @@ capturas de imagen, aclaraciones, procedimientos versionados, revision, tutorial
 Markdown y busqueda textual por organizacion. Ver [docs/api.md](docs/api.md).
 
 La API no crea tablas al arrancar. Sobre una base nueva hay que ejecutar, en este
-orden, las siete migraciones:
+orden, las ocho migraciones:
 
 ```text
 001_initial  002_pgvector  004_local_auth  005_recordings
 006_interactive_learning  007_recording_vectors  008_job_progress
+009_periodic_learning
 ```
 
 Ninguna es opcional. `002_pgvector` requiere instalar pgvector en el servidor y
@@ -98,7 +99,7 @@ Embeddings, busqueda vectorial, chat RAG y voz quedan pendientes; ver
 ```
 
 Las pruebas de integracion requieren `COGNITIVE_TEST_DATABASE_URL` apuntando a un
-PostgreSQL de pruebas con pgvector y las siete migraciones aplicadas. Generan
+PostgreSQL de pruebas con pgvector y las ocho migraciones aplicadas. Generan
 datos con UUID nuevos; no usar una base con datos reales. Sin esa variable se
 omiten dichas pruebas y `pytest` termina en verde sin haberlas ejecutado, asi que
 conviene comprobar que el resumen no diga `skipped`.

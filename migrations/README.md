@@ -24,13 +24,17 @@ Si una ejecucion falla, ejecutar `ROLLBACK` antes de corregirla y reintentar.
 - `008_job_progress.sql`: requiere 005; agrega `stage` y `progress_percent` a
   `jobs`. La API las mapea siempre, asi que sin esta migracion cualquier consulta
   de trabajos falla con 503 `Database unavailable or migrations missing`.
+- `009_periodic_learning.sql`: requiere 001 y 005; agrega `procedure_id` a
+  `learning_sessions` y `title` y `origin` a `recordings`. Es aditiva y conserva
+  los datos. Sin ella, listar sesiones falla con 503 aunque el resto de la API
+  responda con normalidad, porque el modelo ya mapea esas columnas.
 
-Las siete son obligatorias: `cognitive_os.infrastructure.database.migrations`
+Las ocho son obligatorias: `cognitive_os.infrastructure.database.migrations`
 las declara en `REQUIRED_MIGRATIONS` y `GET /api/v1/health/ready` nombra las que
 falten. Al agregar una migracion, agregarla tambien a esa tupla y a
 `scripts/test_postgres.ps1`.
 
-Estado 2026-09-17: 001, 002, 004, 005, 006, 007 y 008 aplicadas en cognitive local.
+Estado 2026-09-18: 001, 002, 004, 005, 006, 007, 008 y 009 aplicadas en cognitive local.
 La generacion/vectorizacion se ejecuta con workers separados, no al migrar.
 
 Se empieza con busqueda vectorial exacta. Un indice HNSW se puede agregar cuando
