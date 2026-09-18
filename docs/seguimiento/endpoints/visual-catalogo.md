@@ -1,7 +1,7 @@
 # Catalogo de aprendizaje visual
 
-Actualizado: 2026-09-16. Todas las rutas llevan prefijo `/api/v1`.
-24 operaciones HTTP y un WebSocket nuevos; las fichas 01..37 conservan la API previa.
+Actualizado: 2026-09-18. Todas las rutas llevan prefijo `/api/v1`.
+24 operaciones HTTP y dos WebSocket nuevos; las fichas 01..37 conservan la API previa.
 
 | Metodo | Ruta | Ficha |
 | --- | --- | --- |
@@ -30,3 +30,4 @@ Actualizado: 2026-09-16. Todas las rutas llevan prefijo `/api/v1`.
 | GET | `/recordings/{recording_id}/index` | [Comprobar indice vectorial](60-index-status.md) |
 | POST | `/recordings/search` | [Busqueda semantica de videos](61-search-recordings.md) |
 | WS | `/learning-sessions/{session_id}/agent/live` | [Observacion y conversacion en vivo](62-agent-live.md) |
+| WS | `/learning-sessions/{session_id}/agent/live-voice` | [Voz bidireccional en vivo](63-agent-live-voice.md) |

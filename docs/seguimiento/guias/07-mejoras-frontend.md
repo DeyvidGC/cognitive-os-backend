@@ -1,8 +1,12 @@
 # Mejoras del frontend: orden recomendado
 
-Fecha: 2026-09-16. Repositorio revisado: Cognitive-Os en el escritorio del usuario.
+Fecha: 2026-09-18. Repositorio revisado: Cognitive-Os en el escritorio del usuario.
 El backend de esta entrega ya expone los contratos; la unica modificacion de frontend
 realizada aqui fue la correccion de reproduccion en ScreenStudio.tsx.
+
+Actualizacion 2026-09-18: se agrego el backend del agente en vivo con voz
+bidireccional (`/agent/live-voice`, seccion 7 mas abajo). No se toco ningun
+componente de frontend para implementarlo; sigue pendiente por completo.
 
 ## 1. Sesion recuperable
 
@@ -72,6 +76,95 @@ si la longitud del texto cambia. No mostrar rombos de decisiones que no existen 
 - Mostrar indice pendiente/listo/fallido sin bloquear reproduccion del video.
 - Buscador POST /recordings/search: presentar fragmento, fuente, video y revision;
   score es similitud, no porcentaje de certeza. Todavia no es un chat RAG.
+
+## 7. Agente por voz en vivo (nuevo, no implementado en frontend)
+
+Backend listo en `WS /api/v1/learning-sessions/{session_id}/agent/live-voice`
+([ficha completa](../endpoints/63-agent-live-voice.md)). Es un socket distinto
+de `/agent/live`: streaming continuo, no turnos, y el usuario habla y escucha
+en vez de escribir. Falta todo el lado de frontend.
+
+### Conexion y ciclo de vida
+
+- Conectar solo con consentimiento explicito de audio y con la sesion en
+  `capturing`; primera trama `{type:"auth", token, organization_id, consent:true}`,
+  igual que `/agent/live`. Nunca token en query string ni API key de OpenAI en
+  el cliente (el backend nunca la expone; no hay nada que guardar del lado del
+  navegador para hablar con OpenAI).
+- Esperar `{"type":"ready", audio_input, audio_output, observation_interval_seconds,
+  session_max_seconds, ...}` antes de abrir microfono o mandar capturas.
+- Solo puede haber una llamada de voz activa por sesion. Si la conexion
+  responde `{"type":"error","status":409}`, no reintentar automaticamente:
+  avisar al usuario que ya hay otra llamada abierta (otra pestana/dispositivo).
+- Manejar `{"type":"session.ending","reason":...}` cerrando microfono y UI de
+  llamada de inmediato; mostrar el motivo (`max_duration`, `session_status_changed`,
+  `client_disconnect`, `error`) en vez de un error generico.
+- Mandar `{"type":"end"}` y cerrar el socket al colgar, salir de la vista,
+  ocultar la pestana o cerrar la sesion; no dejar la llamada abierta en segundo
+  plano. No reconectar solo despues de un cierre limpio o `max_duration`.
+- Errores `401`/`403` cierran la conexion como en `/agent/live`; no reintentar
+  con el mismo token.
+
+### Audio: microfono y reproduccion
+
+- Capturar con `getUserMedia({audio: true})` solo tras consentimiento explicito
+  y visible (checkbox/boton, no implicito por compartir pantalla).
+- Codificar a PCM16 crudo (no WAV/Opus/WebM) en trozos pequenos —
+  `AudioWorkletNode` es preferible a `ScriptProcessorNode` (deprecado) — y
+  mandarlos como **tramas binarias** WS, respetando el tope de tamano por
+  trozo que informa el backend (`realtime_audio_chunk_max_bytes`, 32 KB por
+  defecto). No envolver el audio en JSON ni base64.
+- El audio de respuesta (TTS) llega tambien en tramas **binarias** PCM16;
+  reproducir con Web Audio API (`AudioContext.decodeAudioData` no aplica a PCM
+  crudo: usar `createBuffer` + `copyToChannel` o un `AudioWorklet` de
+  reproduccion en streaming). Cortar la reproduccion inmediatamente al recibir
+  `session.ending` o al colgar.
+- Mostrar un indicador de "escuchando"/"hablando" basado en si se estan
+  mandando o reproduciendo chunks, no solo en el estado de conexion del socket.
+
+### Capturas de pantalla
+
+- Reenviar la misma captura periodica puntual que ya usa `ScreenStudio` para
+  `/agent/live` (mismo formato JPEG/PNG, base64 sin prefijo `data:`, hasta
+  512 KB), pero como `{"type":"frame","image_base64":"..."}` en el socket de
+  voz, con la cadencia que indico `ready.observation_interval_seconds`
+  (15s por defecto). No mandar cada frame de un stream de video.
+
+### Preguntas proactivas
+
+- `{"type":"clarification.created","clarification_id":"UUID","question":"..."}`
+  puede llegar en cualquier momento, sin que el usuario haya preguntado nada:
+  necesita una UI propia (notificacion/banner sobre la llamada), distinta de
+  como `AgentConversation` muestra las respuestas de `/agent/live`.
+- Responder con `{"type":"clarification_answer","clarification_id":"UUID","text":"..."}`
+  cuando el usuario conteste por texto; si contesta por voz, el backend ya la
+  transcribe y la guarda como conversacion, pero la `Clarification` en si solo
+  se resuelve mandando ese mensaje explicito (no basta con hablar la respuesta).
+- Reutilizar el listado de `GET /learning-sessions/{id}/clarifications` para
+  mostrar el historial completo de preguntas, incluidas las que hizo la voz.
+
+### Que no hace falta construir
+
+- No hay que generar ni administrar tokens efimeros de OpenAI: el backend
+  media toda la conexion, el frontend solo habla con nuestro propio WebSocket.
+- No hay que decodificar function calls ni tool calls de OpenAI: el frontend
+  solo ve `clarification.created`, ya resuelto por el backend.
+- No hay que grabar ni subir el video por este canal: si se quiere que la
+  llamada de voz alimente el informe final, la grabacion de pantalla sigue
+  siendo el flujo de video normal (`RecordingUploadPanel`) en paralelo; el
+  backend ya conecta la transcripcion de voz con ese analisis solo.
+
+### Prueba de aceptacion de esta seccion
+
+Abrir sesion en captura > conectar `/agent/live-voice` > autorizar microfono >
+hablar y escuchar respuesta > compartir pantalla y verificar que llegan
+capturas periodicas > provocar una pregunta proactiva y responderla > intentar
+abrir una segunda llamada de voz en otra pestana y ver el 409 > colgar y
+verificar que el microfono se apaga > dejar pasar el limite de duracion (o
+bajarlo en settings para la prueba) y verificar `session.ending` con
+`max_duration` > terminar la sesion y confirmar que el informe final (si hubo
+video grabado en paralelo) trae la transcripcion de voz sin re-transcribir el
+audio del video.
 
 ## Prueba de aceptacion conjunta
 
