@@ -21,8 +21,16 @@ Si una ejecucion falla, ejecutar `ROLLBACK` antes de corregirla y reintentar.
   informes, evidencia de video por paso y conversacion del agente.
 - `007_recording_vectors.sql`: requiere 002 y 006; vectores de informes aprobados
   y trabajos index_recording. Modelos de embedding distintos no se mezclan.
+- `008_job_progress.sql`: requiere 005; agrega `stage` y `progress_percent` a
+  `jobs`. La API las mapea siempre, asi que sin esta migracion cualquier consulta
+  de trabajos falla con 503 `Database unavailable or migrations missing`.
 
-Estado 2026-09-16: 001, 002, 004, 005, 006 y 007 aplicadas en cognitive local.
+Las siete son obligatorias: `cognitive_os.infrastructure.database.migrations`
+las declara en `REQUIRED_MIGRATIONS` y `GET /api/v1/health/ready` nombra las que
+falten. Al agregar una migracion, agregarla tambien a esa tupla y a
+`scripts/test_postgres.ps1`.
+
+Estado 2026-09-17: 001, 002, 004, 005, 006, 007 y 008 aplicadas en cognitive local.
 La generacion/vectorizacion se ejecuta con workers separados, no al migrar.
 
 Se empieza con busqueda vectorial exacta. Un indice HNSW se puede agregar cuando

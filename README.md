@@ -25,6 +25,9 @@ Documentacion interactiva: http://127.0.0.1:8000/docs
 Las ejecuciones locales usan el puerto 8000. El asistente detiene su ejecucion
 al terminar las comprobaciones para dejar el puerto libre para PyCharm.
 Estado del proceso: `GET /api/v1/health` (no comprueba servicios externos).
+Estado de la base: `GET /api/v1/health/ready`, que responde 200 cuando la base
+responde y tiene todas las migraciones, y 503 nombrando las que falten. Es la
+primera comprobacion ante un 503 `Database unavailable or migrations missing`.
 Se conservan `/` y `/hello/{name}` por compatibilidad.
 
 La configuracion lee variables con prefijo `COGNITIVE_` y un archivo `.env`
@@ -33,7 +36,6 @@ opcional. Las variables disponibles estan en `.env.example`.
 ## Estructura
 
 Nuevo flujo visual: [pantalla, audio, agente, informes y reanudacion](docs/seguimiento/guias/06-aprendizaje-visual.md).
-Aplicar tambien migraciones 005 y 006 antes de usar esta version de la API.
 
 ```text
 src/cognitive_os/
@@ -57,10 +59,23 @@ Implementado: autenticacion local, modelos SQLAlchemy, sesiones, eventos,
 capturas de imagen, aclaraciones, procedimientos versionados, revision, tutoriales
 Markdown y busqueda textual por organizacion. Ver [docs/api.md](docs/api.md).
 
-La API no crea tablas al arrancar. Sobre una base nueva, ejecutar las migraciones
-001_initial y 004_local_auth; sobre la base existente ejecutar solamente 004.
-La migracion 002 de pgvector es opcional e independiente. `003_Query` es una
-consulta local, no una migracion.
+La API no crea tablas al arrancar. Sobre una base nueva hay que ejecutar, en este
+orden, las siete migraciones:
+
+```text
+001_initial  002_pgvector  004_local_auth  005_recordings
+006_interactive_learning  007_recording_vectors  008_job_progress
+```
+
+Ninguna es opcional. `002_pgvector` requiere instalar pgvector en el servidor y
+`007_recording_vectors` no se puede aplicar sin ella. Saltarse `007` u `008` deja
+la tabla `jobs` sin las columnas y el check que usa la API, y cualquier peticion
+que cree o consulte trabajos responde 503 `Database unavailable or migrations
+missing`. `003_Query` es una consulta local, no una migracion.
+
+Sobre una base que ya tenga una version anterior, aplicar solo las que falten;
+`GET /api/v1/health/ready` las lista por nombre. Detalle de cada archivo en
+[migrations/README.md](migrations/README.md).
 
 Configurar `COGNITIVE_DATABASE_URL` en `.env` segun `.env.example`, usando un usuario
 con acceso al esquema `cognitive`. Configurar `COGNITIVE_REGISTRATION_ENABLED=true`
@@ -83,10 +98,13 @@ Embeddings, busqueda vectorial, chat RAG y voz quedan pendientes; ver
 ```
 
 Las pruebas de integracion requieren `COGNITIVE_TEST_DATABASE_URL` apuntando a un
-PostgreSQL de pruebas con migraciones 001 y 004. Generan datos con UUID nuevos;
-no usar una base con datos reales. Sin esa variable se omiten dichas pruebas.
+PostgreSQL de pruebas con pgvector y las siete migraciones aplicadas. Generan
+datos con UUID nuevos; no usar una base con datos reales. Sin esa variable se
+omiten dichas pruebas y `pytest` termina en verde sin haberlas ejecutado, asi que
+conviene comprobar que el resumen no diga `skipped`.
 En Windows con PostgreSQL 18, `scripts/test_postgres.ps1` prepara y detiene una
-instancia temporal aislada automaticamente.
+instancia temporal aislada automaticamente, con las migraciones ya aplicadas.
+Las migraciones exigen que la base se llame `cognitive`, tambien la de pruebas.
 
 ## Ramas
 
