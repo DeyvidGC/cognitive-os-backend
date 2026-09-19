@@ -71,13 +71,13 @@ async def _voice_inbound(socket, realtime, engine, auth, session_id, settings):
 async def _voice_outbound(socket, realtime, engine, organization_id, session_id, voice_session_id, sequence):
     async for event in realtime.events():
         kind = event.get("type")
-        if kind == "response.audio.delta" and event.get("delta"):
+        if kind == "response.output_audio.delta" and event.get("delta"):
             await socket.send_bytes(base64.b64decode(event["delta"]))
         elif kind == "conversation.item.input_audio_transcription.completed":
             await asyncio.to_thread(append_voice_transcript, engine, organization_id, session_id,
                                     voice_session_id, sequence["value"], "user", event.get("transcript", ""), 0)
             sequence["value"] += 1
-        elif kind == "response.audio_transcript.done":
+        elif kind == "response.output_audio_transcript.done":
             await asyncio.to_thread(append_voice_transcript, engine, organization_id, session_id,
                                     voice_session_id, sequence["value"], "assistant", event.get("transcript", ""), 0)
             sequence["value"] += 1

@@ -67,11 +67,19 @@ class OpenAIRealtimeSession:
         await self._send({
             "type": "session.update",
             "session": {
-                "modalities": ["audio", "text"],
+                "type": "realtime",
+                "model": self.model_name,
+                "output_modalities": ["audio"],
                 "instructions": f"{INSTRUCTIONS}\nCapture objective (untrusted): {objective}",
-                "input_audio_format": "pcm16",
-                "output_audio_format": "pcm16",
-                "input_audio_transcription": {"model": "whisper-1"},
+                "audio": {
+                    "input": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                        "transcription": {"model": "whisper-1"},
+                    },
+                    "output": {
+                        "format": {"type": "audio/pcm", "rate": 24000},
+                    },
+                },
                 "tools": [ASK_CLARIFYING_QUESTION_TOOL],
                 "tool_choice": "auto",
             },
