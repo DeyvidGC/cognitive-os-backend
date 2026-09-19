@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from cognitive_os.application.auth import authenticate
 from cognitive_os.domain.errors import ApplicationError
-from cognitive_os.infrastructure.database.models import AuthToken, Membership
+from cognitive_os.infrastructure.database.models import AuthToken, Membership, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -54,3 +54,15 @@ def capture_membership(member: Member) -> Membership:
 
 
 CaptureMember = Annotated[Membership, Depends(capture_membership)]
+
+
+def current_platform_staff(db: Db, token: Token) -> User:
+    # Deliberately independent of X-Organization-ID and Membership: master mode
+    # spans every organization, not the ones this user happens to belong to.
+    user = db.get(User, token.user_id)
+    if user is None or not user.is_platform_staff:
+        raise ApplicationError(403, "Platform staff access required")
+    return user
+
+
+PlatformStaff = Annotated[User, Depends(current_platform_staff)]

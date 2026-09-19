@@ -16,7 +16,7 @@ Estado 2026-09-18. [Flujo y endpoints](../guias/06-aprendizaje-visual.md).
 | session_events (`realtime_voice_transcript`) | Segmentos de transcripcion de la llamada de voz, con hablante | Insumo del analisis visual sin volver a transcribir el video |
 | jobs | Trabajo, intentos, lease, error sanitizado | Reanudar procesamiento sin duplicar |
 | procedure_versions / steps / step_recording_evidence | Procedimiento y enlace a video/revision/fotogramas | Publicacion gobernada |
-| recording_vectors | Fragmento de informe aprobado + vector 1536 + fuente/modelo/revision | Busqueda semantica de videos |
+| recording_vectors | Fragmento de informe aprobado + vector 1536 + fuente/modelo/revision + status (`active`/`superseded`) + superseded_by | Busqueda semantica de videos |
 | knowledge_chunks / chunk_embeddings | Esquema previo de conocimiento de procedimientos | Publicacion y futura ampliacion semantica |
 
 ```mermaid
@@ -41,9 +41,16 @@ erDiagram
 3. OpenAI genera un vector numerico por fragmento con `text-embedding-3-small`,
    solicitando 1536 dimensiones. pgvector vive dentro de PostgreSQL, no otra DB.
 4. Ante una pregunta, se genera su vector con el mismo modelo y se ordenan los
-   fragmentos por similitud coseno. Se filtra organizacion, modelo y revision aprobada.
+   fragmentos por similitud coseno. Se filtra organizacion, modelo, revision aprobada
+   y `status='active'`.
 5. Se devuelve texto, score, recording_id, session_id, revision y fuente. El score
    es similitud, no probabilidad de verdad ni porcentaje de confianza.
+6. Si la grabacion pertenece a un procedimiento (`learning_sessions.procedure_id`)
+   que ya tenia fragmentos indexados de otra grabacion, el worker compara los
+   fragmentos nuevos contra esos fragmentos activos y, solo ante candidatos
+   similares, pide a un modelo curador separado (`OPENAI_CURATOR_MODEL`) que
+   decida cuales quedan `superseded`. Ver
+   [guias/06-aprendizaje-visual.md](../guias/06-aprendizaje-visual.md).
 
 La busqueda actual devuelve fragmentos, no una respuesta RAG redactada. No entrena
 ni modifica los pesos del modelo. Un chat RAG con citas y abstencion queda pendiente.
@@ -75,7 +82,8 @@ FROM cognitive.recording_vectors
 ORDER BY created_at DESC LIMIT 20;
 ```
 
-Las migraciones 005/006/007/010 son aditivas y estan aplicadas en la base local.
+Las migraciones 005/006/007/010/011 son aditivas; 011 (status/superseded_by) esta
+pendiente de aplicar en la base local igual que 010.
 El control multiempresa se aplica en consultas de la API y claves foraneas compuestas;
 no se debe exponer PostgreSQL directamente a usuarios finales como sustituto de RBAC.
 

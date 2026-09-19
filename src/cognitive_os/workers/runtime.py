@@ -13,8 +13,11 @@ def worker_loop(settings, kind, stop):
     try:
         from cognitive_os.infrastructure.ai.openai_drafts import OpenAIDraftProvider
         from cognitive_os.infrastructure.ai.openai_embeddings import OpenAIEmbeddingProvider
+        from cognitive_os.infrastructure.ai.openai_curator import OpenAIKnowledgeCurator
+        from cognitive_os.infrastructure.ai.openai_policy import OpenAIPolicyProvider
         from cognitive_os.infrastructure.ai.openai_visual import OpenAIVisualProvider
         from cognitive_os.workers.consolidation import run_once
+        from cognitive_os.workers.policy_index import run_policy_index_once
         from cognitive_os.workers.recording_index import run_index_once
         from cognitive_os.workers.visual import run_visual_once
     except KeyboardInterrupt:
@@ -24,10 +27,17 @@ def worker_loop(settings, kind, stop):
         return
 
     provider = None
+    curator = None
+    policy_provider = None
     engine = None
     try:
         provider = {"consolidate": OpenAIDraftProvider, "analyze_recording": OpenAIVisualProvider,
-                    "index_recording": OpenAIEmbeddingProvider}[kind](settings)
+                    "index_recording": OpenAIEmbeddingProvider,
+                    "index_policy": OpenAIEmbeddingProvider}[kind](settings)
+        if kind == "index_recording":
+            curator = OpenAIKnowledgeCurator(settings)
+        if kind == "index_policy":
+            policy_provider = OpenAIPolicyProvider(settings)
         engine = create_engine(settings.database_url.get_secret_value(), pool_pre_ping=True,
                                hide_parameters=True, connect_args={"connect_timeout": 5})
         while not stop.is_set():
@@ -35,7 +45,9 @@ def worker_loop(settings, kind, stop):
                 if kind == "analyze_recording":
                     worked = run_visual_once(engine, provider, settings)
                 elif kind == "index_recording":
-                    worked = run_index_once(engine, provider)
+                    worked = run_index_once(engine, provider, None, curator, settings.knowledge_supersede_similarity)
+                elif kind == "index_policy":
+                    worked = run_policy_index_once(engine, provider, policy_provider, settings)
                 else:
                     worked = run_once(engine, provider, settings.worker_lease_seconds)
                 if not worked:
@@ -52,6 +64,10 @@ def worker_loop(settings, kind, stop):
     finally:
         if provider is not None:
             provider.close()
+        if curator is not None:
+            curator.close()
+        if policy_provider is not None:
+            policy_provider.close()
         if engine is not None:
             engine.dispose()
 
@@ -67,8 +83,8 @@ class LocalWorkers:
             log.warning("Local workers not started: database or OpenAI configuration missing")
             return
         context = multiprocessing.get_context("spawn")
-        for kind in ("consolidate", "analyze_recording", "index_recording"):
-            if kind == "analyze_recording" and not self.settings.azure_storage_connection_string:
+        for kind in ("consolidate", "analyze_recording", "index_recording", "index_policy"):
+            if kind in ("analyze_recording", "index_policy") and not self.settings.azure_storage_connection_string:
                 continue
             process = context.Process(target=worker_loop, args=(self.settings, kind, self.stop_event),
                                       name=f"cognitive-{kind}", daemon=True)

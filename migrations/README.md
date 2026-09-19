@@ -33,8 +33,41 @@ Si una ejecucion falla, ejecutar `ROLLBACK` antes de corregirla y reintentar.
   parcial) y el tipo de evento `realtime_voice_transcript` en `session_events`,
   separado del `transcript` que ya podia enviar el cliente. Sin ella, el agente
   de voz en vivo no puede persistir sesiones ni transcripcion.
+- `011_knowledge_consolidation.sql`: requiere 007; agrega `status` y
+  `superseded_by` a `recording_vectors`. Permite que una grabacion nueva de un
+  procedimiento ya indexado marque como `superseded` los fragmentos antiguos que
+  actualiza, en vez de solo acumular vectores. Aditiva: las filas existentes
+  quedan `active` por defecto. Ver [modelo curador](../docs/seguimiento/guias/06-aprendizaje-visual.md).
+- `012_knowledge_gaps.sql`: requiere 002 y 007; agrega `knowledge_gaps`, una
+  pregunta del chatbot que el conocimiento publicado no pudo responder. Se
+  deduplica por similitud de embedding: repreguntar lo mismo con otras palabras
+  incrementa `asked_count` de la misma fila en vez de crear otra.
+- `013_chat_queries.sql`: requiere 001 y 012; agrega `chat_queries`, un registro
+  de cada pregunta al chatbot (respondida o no) para que el dashboard de uso
+  calcule conteos, volumen diario y temas mas preguntados sin recalcularlos
+  desde `knowledge_gaps`, que solo guarda las no respondidas.
+- `014_policy_analyzer.sql`: requiere 002 y 013; agrega `policy_documents` (con
+  su propia maquina de estados uploading/queued/processing/ready/failed, sin
+  usar `cognitive.jobs`) y `policy_vectors` (vectores por clausula). Agrega
+  `policy_id` a `chat_queries` para que el dashboard de uso mezcle preguntas
+  del chatbot de conocimiento y del analizador de polizas.
+- `015_change_proposals.sql`: requiere 001; agrega `change_proposals`, una
+  solicitud de cambio en lenguaje natural sobre una version publicada.
+  Aplicarla nunca modifica la version publicada: crea una nueva version
+  `draft` (version_number+1) que igual debe pasar por submit/approve/publish.
+- `016_platform_staff.sql`: requiere 001; agrega `users.is_platform_staff`
+  (default false). Solo estos usuarios pueden usar `/master/*` para comparar
+  conocimiento y uso entre organizaciones, saltandose a proposito el chequeo
+  de membresia por organizacion que exige el resto de la API.
+- `017_policy_retire.sql`: requiere 014; agrega `'retired'` a los estados
+  validos de `policy_documents`. Retirar una poliza la saca de busqueda y
+  listados sin borrarla: esta base no tiene endpoints DELETE en ningun lado.
+- `018_change_proposal_kinds.sql`: requiere 015; agrega `kind`
+  (insert/edit/delete, default `insert`) y `step_position` a
+  `change_proposals`. Antes solo se podia insertar un paso; ahora tambien se
+  puede pedir editar el texto de un paso existente o eliminarlo.
 
-Las nueve son obligatorias: `cognitive_os.infrastructure.database.migrations`
+Las dieciocho son obligatorias: `cognitive_os.infrastructure.database.migrations`
 las declara en `REQUIRED_MIGRATIONS` y `GET /api/v1/health/ready` nombra las que
 falten. Al agregar una migracion, agregarla tambien a esa tupla y a
 `scripts/test_postgres.ps1`.

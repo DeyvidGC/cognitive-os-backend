@@ -33,6 +33,7 @@ class User(Identified, Created, Base):
     __tablename__ = "users"
     identity_subject: Mapped[str]
     display_name: Mapped[str]
+    is_platform_staff: Mapped[bool] = mapped_column(default=False)
 
 
 class Membership(Created, Base):
@@ -258,6 +259,45 @@ class RealtimeVoiceSession(Identified, Created, Base):
     ended_at: Mapped[datetime | None]
     transcript_event_count: Mapped[int] = mapped_column(default=0)
     clarifications_created: Mapped[int] = mapped_column(default=0)
+
+
+class ChangeProposal(Identified, Created, Base):
+    __tablename__ = "change_proposals"
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    procedure_id: Mapped[UUID]
+    requested_by: Mapped[UUID]
+    request_text: Mapped[str]
+    kind: Mapped[str] = mapped_column(default="insert")
+    after_position: Mapped[int]
+    step_position: Mapped[int | None]
+    instruction: Mapped[str]
+    expected_result: Mapped[str]
+    rationale: Mapped[str] = mapped_column(default="")
+    model_name: Mapped[str]
+    status: Mapped[str] = mapped_column(default="pending")
+    applied_version_id: Mapped[UUID | None]
+    resolved_at: Mapped[datetime | None]
+    resolved_by: Mapped[UUID | None]
+
+
+class PolicyDocument(Identified, Created, Base):
+    __tablename__ = "policy_documents"
+    organization_id: Mapped[UUID]
+    blob_key: Mapped[str]
+    blob_snapshot: Mapped[str | None]
+    media_type: Mapped[str] = mapped_column(default="application/pdf")
+    title: Mapped[str] = mapped_column(default="")
+    source: Mapped[str]
+    size_bytes: Mapped[int]
+    content_sha256: Mapped[str | None]
+    status: Mapped[str] = mapped_column(default="uploading")
+    error_code: Mapped[str | None]
+    model_name: Mapped[str | None]
+    attempts: Mapped[int] = mapped_column(default=0)
+    locked_until: Mapped[datetime | None]
+    locked_by: Mapped[str | None]
+    analyzed_at: Mapped[datetime | None]
 
 
 class AgentTurn(Identified, Created, Base):

@@ -1,13 +1,14 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from cognitive_os.infrastructure.ai.openai_curator import SupersedeDecision
 from cognitive_os.infrastructure.ai.openai_embeddings import validate_vectors
 from cognitive_os.infrastructure.database.models import Job, RecordingReport
 from cognitive_os.workers.recording_index import run_index_once
-from test_recordings import prepare_report, storage, video_file
+from test_recordings import prepare_report, run_video, storage, video_file
 
 
 class Embeddings:
@@ -85,6 +86,60 @@ def test_flow_transcript_and_history(api, account, storage):
     approve(api, owner, recording_id, report["revision"])
     history = api.get(path + "/report/history", headers=owner["headers"]).json()
     assert history[0]["revision"] == 1 and history[0]["snapshot"]["review_status"] == "pending"
+
+
+class AlwaysSupersede:
+    """Fake curator: replaces every offered candidate with the new fragment.
+
+    Mirrors OpenAIKnowledgeCurator's return shape without calling OpenAI, so the
+    test exercises the supersede wiring in recording_index.py deterministically.
+    """
+
+    def curate(self, candidates):
+        return [SupersedeDecision(new_chunk_index=item["new_chunk_index"],
+                                  superseded_vector_ids=[existing["id"] for existing in item["existing"]])
+                for item in candidates]
+
+
+def test_knowledge_consolidation_supersedes_outdated_fragment(api, account, storage, monkeypatch):
+    owner = account()
+    session_id, recording_id, report = prepare_report(api, owner, storage)
+    path = f"/api/v1/recordings/{recording_id}"
+    approve(api, owner, recording_id, report["revision"])
+    procedure_id = api.post(path + "/procedure", headers=owner["headers"]).json()["procedure_id"]
+    org_id = UUID(owner["organization_id"])
+    assert run_index_once(api.app.state.engine, Embeddings(), org_id)
+
+    session2 = api.post("/api/v1/learning-sessions", headers=owner["headers"], json={
+        "objective": "Actualizar formulario", "application_name": "Demo", "consent": True,
+        "procedure_id": procedure_id}).json()
+    data = {"idempotency_key": str(uuid4()), "media_type": "video/mp4", "size_bytes": 100, "consent": True}
+    recording2 = api.post(f"/api/v1/learning-sessions/{session2['id']}/recordings",
+                          headers=owner["headers"], json=data).json()["id"]
+    path2 = f"/api/v1/recordings/{recording2}"
+    assert api.post(path2 + "/complete", headers=owner["headers"]).status_code == 200
+    assert api.post(path2 + "/process", headers=owner["headers"]).status_code == 202
+    run_video(api, owner)
+    report2 = api.get(path2 + "/report", headers=owner["headers"]).json()
+    approve(api, owner, recording2, report2["revision"])
+    assert api.post(path2 + "/index", headers=owner["headers"]).status_code == 202
+    assert run_index_once(api.app.state.engine, Embeddings(), org_id, AlwaysSupersede(), 0.75)
+    monkeypatch.setattr("cognitive_os.api.v1.endpoints.recording_knowledge.OpenAIEmbeddingProvider", Embeddings)
+
+    with Session(api.app.state.engine) as db:
+        rows = db.execute(text("SELECT recording_id, status, superseded_by FROM cognitive.recording_vectors "
+                               "WHERE organization_id=:org"), {"org": org_id}).mappings().all()
+    by_recording = {}
+    for row in rows:
+        by_recording.setdefault(str(row["recording_id"]), []).append(row)
+    assert all(row["status"] == "superseded" and row["superseded_by"] is not None
+              for row in by_recording[recording_id])
+    assert all(row["status"] == "active" for row in by_recording[recording2])
+
+    response = api.post("/api/v1/recordings/search", headers=owner["headers"], json={"query": "formulario"})
+    assert response.status_code == 200, response.text
+    results = response.json()["results"]
+    assert results and all(item["recording_id"] == recording2 for item in results)
 
 
 def test_embedding_validation():

@@ -23,6 +23,14 @@ REQUIRED_MIGRATIONS = (
     "008_job_progress",
     "009_periodic_learning",
     "010_realtime_voice",
+    "011_knowledge_consolidation",
+    "012_knowledge_gaps",
+    "013_chat_queries",
+    "014_policy_analyzer",
+    "015_change_proposals",
+    "016_platform_staff",
+    "017_policy_retire",
+    "018_change_proposal_kinds",
 )
 
 

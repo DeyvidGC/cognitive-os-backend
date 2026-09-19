@@ -60,12 +60,33 @@ def search_vectors(db, organization_id, model, vector, limit):
         JOIN cognitive.recording_reports p ON p.recording_id=v.recording_id
           AND p.organization_id=v.organization_id AND p.revision=v.report_revision
         JOIN cognitive.recordings r ON r.id=v.recording_id AND r.organization_id=v.organization_id
-        WHERE v.organization_id=:org AND v.model_name=:model
+        WHERE v.organization_id=:org AND v.model_name=:model AND v.status='active'
           AND p.review_status='approved' AND r.status='ready'
         ORDER BY v.embedding OPERATOR(public.<=>) CAST(:vector AS public.vector), v.id
         LIMIT :limit
     """), {"org": organization_id, "model": model, "vector": json.dumps(vector), "limit": limit})
     return [dict(row) for row in rows.mappings()]
+
+
+def find_supersede_candidates(db, organization_id, procedure_id, recording_id, model, vector, threshold, limit=3):
+    """Active fragments from OTHER recordings of the same procedure that a new,
+    near-duplicate fragment might update. A cheap embedding pre-filter so the
+    curator model only ever judges a handful of already-similar pairs."""
+    if procedure_id is None:
+        return []
+    rows = db.execute(text("""
+        SELECT v.id, v.content,
+               1 - (v.embedding OPERATOR(public.<=>) CAST(:vector AS public.vector)) AS score
+        FROM cognitive.recording_vectors v
+        JOIN cognitive.recordings r ON r.id=v.recording_id AND r.organization_id=v.organization_id
+        JOIN cognitive.learning_sessions s ON s.id=r.session_id AND s.organization_id=r.organization_id
+        WHERE v.organization_id=:org AND v.model_name=:model AND v.status='active'
+          AND s.procedure_id=:procedure_id AND v.recording_id != :recording_id
+        ORDER BY v.embedding OPERATOR(public.<=>) CAST(:vector AS public.vector), v.id
+        LIMIT :limit
+    """), {"org": organization_id, "model": model, "vector": json.dumps(vector),
+           "procedure_id": procedure_id, "recording_id": recording_id, "limit": limit})
+    return [dict(row) for row in rows.mappings() if row["score"] >= threshold]
 
 
 def report_flow(report):

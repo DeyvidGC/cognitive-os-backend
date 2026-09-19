@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None, validation_alias="OPENAI_API_KEY", repr=False)
     openai_model: str = Field(default="gpt-5.6-luna", validation_alias="OPENAI_MODEL", min_length=1)
     openai_embedding_model: str = Field(default="text-embedding-3-small", validation_alias="OPENAI_EMBEDDING_MODEL", min_length=1, max_length=100)
+    openai_curator_model: str = Field(default="gpt-5.6-luna", validation_alias="OPENAI_CURATOR_MODEL", min_length=1, max_length=100)
+    openai_answer_model: str = Field(default="gpt-5.6-luna", validation_alias="OPENAI_ANSWER_MODEL", min_length=1, max_length=100)
+    knowledge_supersede_similarity: float = Field(default=0.75, ge=0.5, le=0.99)
+    knowledge_gap_dedup_similarity: float = Field(default=0.88, ge=0.5, le=0.99)
+    chatbot_search_limit: int = Field(default=6, ge=1, le=20)
     openai_base_url: str = Field(default="https://api.openai.com/v1", validation_alias="OPENAI_BASE_URL")
     worker_lease_seconds: int = Field(default=300, ge=180, le=3600)
     embedded_workers: bool = False
@@ -26,6 +31,8 @@ class Settings(BaseSettings):
     recording_max_seconds: int = Field(default=1800, ge=1, le=1800)
     recording_frame_interval_seconds: int = Field(default=15, ge=5, le=60)
     recording_lease_seconds: int = Field(default=1800, ge=600, le=3600)
+    policy_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1024, le=52428800)
+    policy_lease_seconds: int = Field(default=600, ge=60, le=3600)
     cors_origins: list[str] = Field(default_factory=list)
     openai_transcription_model: str = Field(default="gpt-4o-mini-transcribe",
                                             validation_alias="OPENAI_TRANSCRIPTION_MODEL")

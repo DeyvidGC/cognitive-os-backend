@@ -39,7 +39,12 @@ backend (ver [ficha del endpoint](../endpoints/63-agent-live-voice.md)). Ninguno
 dos transmite video continuo: la pantalla sigue llegando como capturas puntuales,
 no como stream de frames. `gpt-5.6-luna` genera texto/vision; `gpt-realtime`
 conversa por voz; `gpt-4o-mini-transcribe`/Whisper transcriben audio grabado;
-`text-embedding-3-small` genera vectores.
+`text-embedding-3-small` genera vectores; un modelo curador separado
+(`OPENAI_CURATOR_MODEL`, por defecto `gpt-5.6-luna`) decide, solo dentro del
+worker `index_recording`, si un fragmento nuevo reemplaza a uno ya indexado del
+mismo procedimiento. Nunca conversa con el usuario ni ve la grabacion completa:
+recibe unicamente pares de fragmentos cortos que el filtro de similitud de
+embeddings ya preselecciono como casi duplicados.
 
 ## Ejecutar
 
@@ -205,6 +210,25 @@ preguntas abiertas. El informe aprobado es inmutable y encola indexacion vectori
 `POST /.../procedure` crea un procedimiento borrador con pasos confirmados y enlaces
 al video/revision; repetir retorna la misma version. No publica automaticamente:
 usar los endpoints existentes submit, approve y publish de procedure-versions.
+
+## Consolidacion de conocimiento entre grabaciones
+
+Cuando el cliente actualiza un procedimiento con una sesion/grabacion nueva
+(`learning_sessions.procedure_id` ya apuntaba al mismo procedimiento, sea porque
+se creo la sesion con ese `procedure_id` o porque una grabacion anterior ya se
+convirtio en procedimiento), el worker `index_recording` no se limita a agregar
+vectores: por cada fragmento nuevo busca en `cognitive.recording_vectors`
+fragmentos `active` de OTRAS grabaciones del mismo procedimiento con similitud de
+embedding sobre `COGNITIVE_KNOWLEDGE_SUPERSEDE_SIMILARITY` (0.75 por defecto).
+Solo si aparecen candidatos llama al modelo curador (`OPENAI_CURATOR_MODEL`) con
+esos pares cortos; si no hay candidatos, no hay llamada. El curador decide, por
+fragmento nuevo, cuales de sus candidatos describen la misma regla/paso con
+informacion distinta y deben marcarse `status='superseded'` con
+`superseded_by` apuntando al fragmento nuevo. `search_vectors` (usado por
+`POST /recordings/search`) solo devuelve fragmentos `active`, asi que una
+respuesta nunca mezcla la version vieja y la corregida de un mismo hecho.
+Una grabacion sin `procedure_id`, o la primera de un procedimiento, nunca llama
+al curador: no hay nada con qué compararla. Migracion `011_knowledge_consolidation`.
 
 ## Grafico en el frontend
 
