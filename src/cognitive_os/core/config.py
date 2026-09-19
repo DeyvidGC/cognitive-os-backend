@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     agent_max_turns_per_session: int = Field(default=240, ge=1, le=1000)
     agent_min_interval_seconds: int = Field(default=3, ge=1, le=60)
     openai_realtime_model: str = Field(default="gpt-realtime", validation_alias="OPENAI_REALTIME_MODEL", min_length=1)
+    openai_realtime_voice: str = Field(default="alloy", validation_alias="OPENAI_REALTIME_VOICE", min_length=1)
     openai_realtime_url: str = Field(default="wss://api.openai.com/v1/realtime",
                                      validation_alias="OPENAI_REALTIME_URL")
     observation_interval_seconds: int = Field(default=15, ge=5, le=60)

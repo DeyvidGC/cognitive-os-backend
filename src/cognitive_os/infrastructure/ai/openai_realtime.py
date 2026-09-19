@@ -78,6 +78,7 @@ class OpenAIRealtimeSession:
                     },
                     "output": {
                         "format": {"type": "audio/pcm", "rate": 24000},
+                        "voice": self._settings.openai_realtime_voice,
                     },
                 },
                 "tools": [ASK_CLARIFYING_QUESTION_TOOL],
