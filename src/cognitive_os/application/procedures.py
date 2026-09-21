@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from cognitive_os.application.sessions import get_session, require_author
@@ -93,6 +93,29 @@ def version_steps(db: Session, member: Membership, version_id: UUID) -> list[Ste
                                              Step.organization_id == member.organization_id).order_by(Step.position)))
 
 
+def reorder_steps(db: Session, member: Membership, version_id: UUID, step_ids: list[UUID]) -> list[Step]:
+    require_author(member)
+    version = get_version(db, member, version_id, lock=True)
+    if version.status != "draft":
+        raise ApplicationError(409, "Only draft versions can be edited")
+    steps = {step.id: step for step in db.scalars(select(Step).where(
+        Step.version_id == version_id, Step.organization_id == member.organization_id))}
+    if set(step_ids) != set(steps) or len(step_ids) != len(steps):
+        raise ApplicationError(409, "step_ids must list every existing step exactly once")
+    # Two-phase update: the (organization_id, version_id, position) unique
+    # constraint isn't deferrable, so positions are parked past the schema's
+    # max position (steps.position CHECK > 0, StepWrite caps it at 10000)
+    # before the final 1..N values are assigned, avoiding any collision.
+    for offset, step in enumerate(steps.values(), 1):
+        step.position = 10000 + offset
+    db.flush()
+    for position, step_id in enumerate(step_ids, 1):
+        steps[step_id].position = position
+    audit(db, member, "step.reordered", version)
+    db.commit()
+    return version_steps(db, member, version_id)
+
+
 def transition(db: Session, member: Membership, version_id: UUID, action: str) -> ProcedureVersion:
     if action in {"approve", "return", "retire"}:
         require_reviewer(member)
@@ -149,6 +172,20 @@ def write_tutorial(db: Session, member: Membership, version_id: UUID, content: s
     audit(db, member, "tutorial.updated", version)
     db.commit()
     return tutorial
+
+
+def search_knowledge(db: Session, organization_id: UUID, q: str, limit: int):
+    query = text("""
+        SELECT c.id, v.procedure_id, c.version_id, v.version_number, c.step_id, c.content,
+               ts_rank(c.search_document, websearch_to_tsquery('spanish', :q)) AS rank
+        FROM cognitive.knowledge_chunks c
+        JOIN cognitive.procedure_versions v
+          ON v.id = c.version_id AND v.organization_id = c.organization_id
+        WHERE c.organization_id = :organization_id AND v.status = 'published'
+          AND c.search_document @@ websearch_to_tsquery('spanish', :q)
+        ORDER BY rank DESC, c.id LIMIT :limit
+    """)
+    return db.execute(query, {"q": q, "organization_id": organization_id, "limit": limit}).mappings().all()
 
 
 def publish(db: Session, member: Membership, version_id: UUID) -> ProcedureVersion:

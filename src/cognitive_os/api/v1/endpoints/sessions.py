@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
-from cognitive_os.api.dependencies import Db, CaptureMember as Member
+from cognitive_os.api.dependencies import Db, CaptureMember as Member, Owner
 from cognitive_os.application import sessions
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.infrastructure.database.models import Job, LearningSession, SessionEvent
@@ -52,7 +52,7 @@ def finish_session(session_id: UUID, db: Db, member: Member):
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse, tags=["jobs"])
-def get_job(job_id: UUID, db: Db, member: Member):
+def get_job(job_id: UUID, db: Db, member: Owner):
     job = db.scalar(select(Job).where(Job.id == job_id, Job.organization_id == member.organization_id))
     if job is None:
         raise ApplicationError(404, "Job not found")

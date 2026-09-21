@@ -6,7 +6,7 @@ from openai import OpenAIError
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from cognitive_os.api.dependencies import CaptureMember as Member, Db
+from cognitive_os.api.dependencies import CaptureMember as Member, Db, Owner
 from cognitive_os.application.recording_knowledge import enqueue_index, report_flow, search_vectors
 from cognitive_os.application.recordings import get_recording, get_report, require_recording_writer
 from cognitive_os.domain.errors import ApplicationError
@@ -68,7 +68,7 @@ def index(recording_id: UUID, request: Request, db: Db, member: Member):
 
 
 @router.get("/recordings/{recording_id}/index")
-def index_status(recording_id: UUID, request: Request, db: Db, member: Member):
+def index_status(recording_id: UUID, request: Request, db: Db, member: Owner):
     report = get_report(db, member, recording_id)
     model = request.app.state.settings.openai_embedding_model
     count = db.scalar(text("SELECT count(*) FROM cognitive.recording_vectors WHERE organization_id=:org "

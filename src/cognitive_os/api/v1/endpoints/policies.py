@@ -5,7 +5,7 @@ from openai import OpenAIError
 
 from cognitive_os.api.dependencies import CaptureMember, Db, Member
 from cognitive_os.application import policies
-from cognitive_os.application.chatbot import log_query, record_gap
+from cognitive_os.application.chatbot import log_query, record_gap, suggested_questions
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.infrastructure.ai.openai_answer import OpenAIAnswerProvider
 from cognitive_os.infrastructure.ai.openai_embeddings import OpenAIEmbeddingProvider
@@ -74,6 +74,12 @@ def sync(request: Request, db: Db, member: CaptureMember):
         discovered = policies.sync_policies(db, member, store, settings.azure_storage_container,
                                             f"{member.organization_id}/policies/")
     return {"discovered": discovered}
+
+
+@router.get("/policies/{policy_id}/suggested-questions", response_model=list[str])
+def suggestions(policy_id: UUID, db: Db, member: Member):
+    policies.get_policy(db, member, policy_id)
+    return suggested_questions(db, member, policy_id=policy_id)
 
 
 @router.post("/policies/ask", response_model=PolicyAnswerResponse)

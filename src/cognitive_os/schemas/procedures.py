@@ -55,6 +55,11 @@ class StepResponse(StepWrite):
     version_id: UUID
 
 
+class StepReorder(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    step_ids: list[UUID] = Field(min_length=1, max_length=10000)
+
+
 class TutorialWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     content: str = Field(min_length=1, max_length=100000)

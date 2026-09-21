@@ -4,7 +4,9 @@ from fastapi import APIRouter, Query, Request
 from openai import OpenAIError
 
 from cognitive_os.api.dependencies import CaptureMember, Db, Member
-from cognitive_os.application.chatbot import build_citation, history, list_gaps, log_query, record_gap, resolve_gap
+from cognitive_os.application.chatbot import (
+    build_citation, history, list_gaps, log_query, record_gap, resolve_gap, suggested_questions,
+)
 from cognitive_os.application.recording_knowledge import search_vectors
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.infrastructure.ai.openai_answer import OpenAIAnswerProvider
@@ -54,6 +56,11 @@ def ask(data: ChatQuestion, request: Request, db: Db, member: Member):
 @router.get("/chatbot/history", response_model=list[ChatHistoryEntry])
 def chat_history(db: Db, member: Member, limit: int = Query(default=20, ge=1, le=100)):
     return history(db, member, limit)
+
+
+@router.get("/chatbot/suggested-questions", response_model=list[str])
+def suggestions(db: Db, member: Member, limit: int = Query(default=5, ge=1, le=20)):
+    return suggested_questions(db, member, limit=limit)
 
 
 @router.get("/chatbot/gaps", response_model=list[KnowledgeGapResponse])

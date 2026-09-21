@@ -99,6 +99,20 @@ def history(db, member, limit=20):
     return [dict(row) for row in rows]
 
 
+def suggested_questions(db, member, policy_id=None, limit=5):
+    # Real, previously-answered questions beat a hardcoded starter list once
+    # an organization (or a single policy) has enough chatbot history.
+    query = """SELECT question, count(*) AS total FROM cognitive.chat_queries
+        WHERE organization_id=:org AND answered"""
+    params = {"org": member.organization_id, "limit": limit}
+    if policy_id is not None:
+        query += " AND policy_id=:policy_id"
+        params["policy_id"] = policy_id
+    query += " GROUP BY question ORDER BY total DESC, question LIMIT :limit"
+    rows = db.execute(text(query), params).mappings().all()
+    return [row["question"] for row in rows]
+
+
 def resolve_gap(db, member, gap_id):
     result = db.execute(text("""UPDATE cognitive.knowledge_gaps SET status='resolved',
         resolved_at=:now, resolved_by=:user

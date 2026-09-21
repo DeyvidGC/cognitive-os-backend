@@ -65,7 +65,7 @@ async def _voice_inbound(socket, realtime, engine, auth, session_id, settings, s
             raise ApplicationError(413, "Agent message too large")
         data = AgentVoiceInput.model_validate_json(raw)
         if data.type == "frame":
-            image = normalize_frame(data.image_base64)
+            image = await asyncio.to_thread(normalize_frame, data.image_base64)
             if image:
                 logger.info("Live voice session %s: pushing a screenshot at t=%.1fs into the call "
                            "(%d mic chunks received so far)", session_id, time.monotonic() - started_at,
@@ -81,6 +81,9 @@ async def _voice_inbound(socket, realtime, engine, auth, session_id, settings, s
                 raise ApplicationError(422, "clarification_answer requires clarification_id")
             await asyncio.to_thread(resolve_clarification, engine, auth.token, auth.organization_id,
                                     session_id, data.clarification_id, data.text)
+            await realtime.push_text(data.text)
+        elif data.type == "interrupt":
+            await realtime.interrupt(data.item_id, data.audio_end_ms)
         elif data.type == "end":
             raise _VoiceSessionEnd("client_disconnect")
 
@@ -93,6 +96,7 @@ async def _voice_outbound(socket, realtime, engine, organization_id, session_id,
     last_event_at = time.monotonic()
     last_audio_delta_at = None
     audio_bytes_forwarded = 0
+    audio_item_id = None
 
     def _log_background_failure(task: asyncio.Task) -> None:
         if task.cancelled():
@@ -120,7 +124,14 @@ async def _voice_outbound(socket, realtime, engine, organization_id, session_id,
                                "backend or network issue", session_id, provider_gap, event.get("type"),
                                now - started_at)
             kind = event.get("type")
+            if kind == "input_audio_buffer.speech_started":
+                await socket.send_json({"type": "speech_started"})
+            elif kind == "input_audio_buffer.speech_stopped":
+                await socket.send_json({"type": "speech_stopped"})
             if kind == "response.output_audio.delta" and event.get("delta"):
+                if event.get("item_id") != audio_item_id:
+                    audio_item_id = event.get("item_id")
+                    await socket.send_json({"type": "audio.started", "item_id": audio_item_id})
                 if last_audio_delta_at is not None:
                     delta_gap = now - last_audio_delta_at
                     if delta_gap > 1.5:
@@ -149,6 +160,10 @@ async def _voice_outbound(socket, realtime, engine, organization_id, session_id,
                     await socket.send_json({"type": "clarification.created", "clarification_id": created["id"],
                                             "question": created["question"]})
             elif kind == "error":
+                if (event.get("error") or {}).get("code") in {
+                    "response_cancel_not_active", "conversation_already_has_active_response",
+                }:
+                    continue
                 # OpenAI's error payload can include free-text detail; log it for our own
                 # debugging but never forward it to the client verbatim.
                 logger.warning("Realtime provider reported an error event for session %s: %s",

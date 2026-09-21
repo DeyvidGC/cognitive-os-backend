@@ -1,6 +1,6 @@
 # Voz bidireccional en vivo con pantalla compartida
 
-Actualizado: 2026-09-18. Implementado y probado con PostgreSQL real aislado y un
+Actualizado: 2026-09-19. Implementado y probado con PostgreSQL real aislado y un
 proveedor Realtime simulado; no se hizo ninguna llamada real de pago a OpenAI
 Realtime ni se probo con audio real de un navegador.
 
@@ -27,11 +27,11 @@ El servidor responde:
 ```json
 {"type":"ready","model":"gpt-realtime","protocol_version":1,
  "audio_input":true,"audio_output":true,"proactive_questions":true,
- "observation_interval_seconds":15,"session_max_seconds":1800}
+ "observation_interval_seconds":2,"session_max_seconds":1800}
 ```
 
 `observation_interval_seconds` y `session_max_seconds` vienen de los settings
-`COGNITIVE_OBSERVATION_INTERVAL_SECONDS` (5-60, por defecto 15) y
+`COGNITIVE_OBSERVATION_INTERVAL_SECONDS` (1-60, por defecto 2) y
 `COGNITIVE_REALTIME_SESSION_MAX_SECONDS` (60-3600, por defecto 1800).
 
 ## Mensajes cliente -> servidor
@@ -121,3 +121,31 @@ cerrada esta ficha.
 [Que debe implementar el frontend](../guias/07-mejoras-frontend.md) |
 [Flujo completo y contratos](../guias/06-aprendizaje-visual.md) |
 [Base de datos y vectores](../base-de-datos/04-video-y-vectores.md).
+
+
+## Observacion e interrupciones (2026-09-19)
+
+Cada imagen y transcripcion dispara una decision silenciosa (`decide_next_action`).
+Las evidencias recibidas durante otra respuesta se agrupan para el siguiente analisis;
+no se solapan generaciones. El modelo puede escuchar, contestar brevemente o proponer
+una pregunta. Solo una pregunta aceptada por el control de aclaraciones genera voz.
+Las respuestas textuales a aclaraciones tambien se incorporan al contexto del modelo.
+
+El VAD detecta voz y cancela la respuesta en curso, sin crear una respuesta hablada
+por cada pausa. El servidor envia `speech_started` / `speech_stopped` y, antes del
+primer fragmento de cada mensaje hablado, `audio.started` con `item_id`. El cliente
+vacia inmediatamente su cola al recibir `speech_started` y responde con:
+
+```json
+{"type":"interrupt","item_id":"item_del_audio","audio_end_ms":500}
+```
+
+El mismo control sirve para el boton de detener audio. El servidor limita la
+truncacion a audio realmente enviado y no acepta IDs desconocidos. Una cancelacion
+que llega cuando ya termino la respuesta es recuperable y no cuelga.
+
+Ocultar la pestana o cambiar de aplicacion no termina la llamada ni detiene microfono
+ni capturas. Cerrar la pagina, colgar, revocar consentimiento o detener la captura si
+libera los recursos. El navegador puede limitar actividad en segundo plano; no se
+promete continuidad al suspender el sistema. Las capturas temporariamente fallidas
+se reintentan sin colgar; la voz tiene prioridad ante saturacion de red.

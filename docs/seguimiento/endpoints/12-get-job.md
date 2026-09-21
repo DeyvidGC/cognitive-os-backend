@@ -8,11 +8,11 @@ Estado: implementado en codigo al 2026-09-13. Requiere conexion SQL configurada 
 
 ## Para que sirve
 
-Devuelve estado, contadores y version_id del job de la organizacion. version_id permite consultar el borrador creado al completarse. No ejecuta, reintenta ni cancela el job. No expone last_error ni datos internos del lease.
+Devuelve estado, contadores, last_error y version_id del job de la organizacion. version_id permite consultar el borrador creado al completarse. No ejecuta, reintenta ni cancela el job.
 
 ## Acceso
 
-owner, author o reviewer.
+**Cambio 2026-09-20**: antes owner, author o reviewer; ahora solo **owner**. stage/attempts/last_error son detalle de operacion (ficha tecnica), no parte de la vista de un author/reviewer capturando su propio contenido; ver [dependencia Owner](../../../src/cognitive_os/api/dependencies.py).
 
 Enviar `Authorization: Bearer <token>`. Enviar tambien `X-Organization-ID`; el servidor comprueba la membresia.
 

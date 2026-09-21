@@ -99,9 +99,10 @@ en vez de escribir. Falta todo el lado de frontend.
 - Manejar `{"type":"session.ending","reason":...}` cerrando microfono y UI de
   llamada de inmediato; mostrar el motivo (`max_duration`, `session_status_changed`,
   `client_disconnect`, `error`) en vez de un error generico.
-- Mandar `{"type":"end"}` y cerrar el socket al colgar, salir de la vista,
-  ocultar la pestana o cerrar la sesion; no dejar la llamada abierta en segundo
-  plano. No reconectar solo despues de un cierre limpio o `max_duration`.
+- Mandar `{"type":"end"}` y cerrar el socket al colgar, salir de la vista
+  o cerrar la sesion. Cambiar de pestana o aplicacion mantiene la llamada,
+  el microfono y las capturas (requisito actualizado el 2026-09-19).
+  No reconectar solo despues de un cierre limpio o `max_duration`.
 - Errores `401`/`403` cierran la conexion como en `/agent/live`; no reintentar
   con el mismo token.
 

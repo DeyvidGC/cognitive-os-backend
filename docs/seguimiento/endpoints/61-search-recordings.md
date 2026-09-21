@@ -1,10 +1,10 @@
 # Busqueda semantica de videos
 
-Actualizado: 2026-09-16.
+Actualizado: 2026-09-20.
 
 `POST /api/v1/recordings/search`
 
-Body {query: texto 1..1200 caracteres, limit:1..20}. Genera vector de consulta y devuelve results con contenido, fuente, score, grabacion y revision. Solo organizacion actual e informes aprobados vigentes. 503 sin proveedor. No es chat RAG ni busqueda de procedimientos textuales.
+Body {query: texto 1..1200 caracteres, limit:1..20}. Genera vector de consulta y devuelve results con contenido, fuente, score, grabacion, revision y **timestamp_ms** (desde 2026-09-20: el primer frame_indices del fragmento resuelto contra sampling.frames de ese informe; null si el fragmento no citaba un frame, p.ej. resumen o texto del reporte). Permite que el frontend salte directo al momento del video sin una segunda llamada al informe. Solo organizacion actual e informes aprobados vigentes. 503 sin proveedor. No es chat RAG ni busqueda de procedimientos textuales; para una unica llamada que combine video y procedimientos ver [busqueda unificada](64-search-unified.md).
 
 ## Acceso y errores
 

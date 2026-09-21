@@ -32,6 +32,7 @@ class UserResponse(BaseModel):
     email: str
     display_name: str
     memberships: list[MembershipResponse]
+    is_platform_staff: bool = False
 
 
 class TokenResponse(BaseModel):

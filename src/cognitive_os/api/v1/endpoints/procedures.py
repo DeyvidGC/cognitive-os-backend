@@ -2,14 +2,14 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from cognitive_os.api.dependencies import Db, Member
 from cognitive_os.application import procedures
 from cognitive_os.domain.errors import ApplicationError
 from cognitive_os.infrastructure.database.models import Procedure, ProcedureVersion, Tutorial
 from cognitive_os.schemas.procedures import (
-    KnowledgeResult, ProcedureCreate, ProcedureResponse, StepResponse, StepWrite,
+    KnowledgeResult, ProcedureCreate, ProcedureResponse, StepReorder, StepResponse, StepWrite,
     TutorialResponse, TutorialWrite, VersionCreate, VersionResponse,
 )
 
@@ -57,6 +57,11 @@ def get_version(version_id: UUID, db: Db, member: Member):
 @router.post("/procedure-versions/{version_id}/steps", response_model=StepResponse, status_code=201)
 def create_step(version_id: UUID, data: StepWrite, db: Db, member: Member):
     return procedures.write_step(db, member, version_id, data)
+
+
+@router.put("/procedure-versions/{version_id}/steps/reorder", response_model=list[StepResponse])
+def reorder_steps(version_id: UUID, data: StepReorder, db: Db, member: Member):
+    return procedures.reorder_steps(db, member, version_id, data.step_ids)
 
 
 @router.put("/procedure-versions/{version_id}/steps/{step_id}", response_model=StepResponse)
@@ -112,14 +117,4 @@ def retire(version_id: UUID, db: Db, member: Member):
 @router.get("/knowledge/search", response_model=list[KnowledgeResult], tags=["knowledge"])
 def search_knowledge(db: Db, member: Member, q: Annotated[str, Query(min_length=1, max_length=500)],
                      limit: Limit = 10):
-    query = text("""
-        SELECT c.id, v.procedure_id, c.version_id, v.version_number, c.step_id, c.content,
-               ts_rank(c.search_document, websearch_to_tsquery('spanish', :q)) AS rank
-        FROM cognitive.knowledge_chunks c
-        JOIN cognitive.procedure_versions v
-          ON v.id = c.version_id AND v.organization_id = c.organization_id
-        WHERE c.organization_id = :organization_id AND v.status = 'published'
-          AND c.search_document @@ websearch_to_tsquery('spanish', :q)
-        ORDER BY rank DESC, c.id LIMIT :limit
-    """)
-    return db.execute(query, {"q": q, "organization_id": member.organization_id, "limit": limit}).mappings().all()
+    return procedures.search_knowledge(db, member.organization_id, q, limit)

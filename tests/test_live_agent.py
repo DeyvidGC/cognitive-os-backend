@@ -147,6 +147,36 @@ class FakeRealtimeWithError(FakeRealtime):
         yield {"type": "error", "error": {"message": "boom"}}
 
 
+def test_voice_forwards_interruption_and_audio_identity(api, account, monkeypatch):
+    class Interruptible(FakeRealtime):
+        received = []
+
+        async def interrupt(self, item_id, audio_end_ms):
+            self.received.append((item_id, audio_end_ms))
+
+        async def events(self):
+            yield {"type": "response.output_audio.delta", "item_id": "audio-1",
+                   "delta": base64.b64encode(b"\x00\x01").decode()}
+            yield {"type": "input_audio_buffer.speech_started"}
+            yield {"type": "input_audio_buffer.speech_stopped"}
+            yield {"type": "error", "error": {"code": "response_cancel_not_active"}}
+
+    monkeypatch.setattr("cognitive_os.api.v1.endpoints.agent.OpenAIRealtimeSession", Interruptible)
+    owner = account()
+    session_id = session(api, owner)
+    with api.websocket_connect(f"/api/v1/learning-sessions/{session_id}/agent/live-voice") as ws:
+        ws.send_json({"type": "auth", "token": owner["token"], "organization_id": owner["organization_id"], "consent": True})
+        assert ws.receive_json()["type"] == "ready"
+        assert ws.receive_json() == {"type": "audio.started", "item_id": "audio-1"}
+        assert ws.receive_bytes() == b"\x00\x01"
+        assert ws.receive_json()["type"] == "speech_started"
+        assert ws.receive_json()["type"] == "speech_stopped"
+        ws.send_json({"type": "interrupt", "item_id": "audio-1", "audio_end_ms": 100})
+        ws.send_json({"type": "end"})
+        assert ws.receive_json() == {"type": "session.ending", "reason": "client_disconnect"}
+    assert Interruptible.received == [("audio-1", 100)]
+
+
 def test_live_voice_provider_error_ends_the_call(api, account, monkeypatch):
     monkeypatch.setattr("cognitive_os.api.v1.endpoints.agent.OpenAIRealtimeSession", FakeRealtimeWithError)
     owner = account()

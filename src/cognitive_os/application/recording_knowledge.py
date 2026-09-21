@@ -51,10 +51,18 @@ def report_chunks(report):
     return result
 
 
+def _first_timestamp_ms(sampling, source):
+    frames = sampling.get("frames", []) if sampling else []
+    for index in source.get("frame_indices", []):
+        if 0 <= index < len(frames):
+            return frames[index]["timestamp_ms"]
+    return None
+
+
 def search_vectors(db, organization_id, model, vector, limit):
     # Exact tenant-scoped cosine ranking avoids approximate-index tenant recall loss.
     rows = db.execute(text("""
-        SELECT v.id, v.recording_id, r.session_id, v.report_revision, v.content, v.source,
+        SELECT v.id, v.recording_id, r.session_id, v.report_revision, v.content, v.source, p.sampling,
                1 - (v.embedding OPERATOR(public.<=>) CAST(:vector AS public.vector)) AS score
         FROM cognitive.recording_vectors v
         JOIN cognitive.recording_reports p ON p.recording_id=v.recording_id
@@ -65,7 +73,13 @@ def search_vectors(db, organization_id, model, vector, limit):
         ORDER BY v.embedding OPERATOR(public.<=>) CAST(:vector AS public.vector), v.id
         LIMIT :limit
     """), {"org": organization_id, "model": model, "vector": json.dumps(vector), "limit": limit})
-    return [dict(row) for row in rows.mappings()]
+    results = []
+    for row in rows.mappings():
+        item = dict(row)
+        sampling = item.pop("sampling")
+        item["timestamp_ms"] = _first_timestamp_ms(sampling, item["source"])
+        results.append(item)
+    return results
 
 
 def find_supersede_candidates(db, organization_id, procedure_id, recording_id, model, vector, threshold, limit=3):

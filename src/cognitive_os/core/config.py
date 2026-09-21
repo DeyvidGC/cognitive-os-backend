@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     openai_realtime_voice: str = Field(default="alloy", validation_alias="OPENAI_REALTIME_VOICE", min_length=1)
     openai_realtime_url: str = Field(default="wss://api.openai.com/v1/realtime",
                                      validation_alias="OPENAI_REALTIME_URL")
-    observation_interval_seconds: int = Field(default=15, ge=5, le=60)
+    observation_interval_seconds: int = Field(default=2, ge=1, le=60)
     realtime_session_max_seconds: int = Field(default=1800, ge=60, le=3600)
     realtime_reauth_interval_seconds: int = Field(default=20, ge=5, le=120)
     realtime_max_concurrent_sessions: int = Field(default=20, ge=1, le=500)

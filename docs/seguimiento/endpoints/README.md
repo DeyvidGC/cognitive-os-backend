@@ -1,5 +1,6 @@
 # Endpoints
 
+Actualizacion 2026-09-20: [4 rutas nuevas y 2 permisos endurecidos para el rediseno de frontend](rediseno-2026-09-20.md).
 Actualizacion 2026-09-16: [24 rutas HTTP visuales y un WebSocket](visual-catalogo.md).
 El catalogo inferior conserva las rutas previas.
 

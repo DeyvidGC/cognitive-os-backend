@@ -1,6 +1,6 @@
 # Comprobar indice vectorial
 
-Actualizado: 2026-09-16.
+Actualizado: 2026-09-20.
 
 `GET /api/v1/recordings/{recording_id}/index`
 
@@ -8,9 +8,8 @@ Devuelve indexed, chunks, model, dimensions:1536, recording_id y revision. Cuent
 
 ## Acceso y errores
 
-HTTP requiere Bearer y X-Organization-ID. Roles de captura: owner, author, reviewer;
-reader no accede a videos/informes originales. Los cambios que requieren escritor
-respetan autor de sesion y rol owner. Recursos de otra organizacion retornan 404.
+**Cambio 2026-09-20**: antes owner, author o reviewer; ahora solo **owner** (contadores de indexacion son vista de operacion, ver [12-get-job.md](12-get-job.md)).
+HTTP requiere Bearer y X-Organization-ID. Recursos de otra organizacion retornan 404.
 Errores HTTP comunes: 401 sesion expirada, 403 permiso, 409 conflicto y 422 contrato.
 El WebSocket autentica por su primera trama, no por esos encabezados HTTP.
 

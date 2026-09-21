@@ -56,6 +56,17 @@ def capture_membership(member: Member) -> Membership:
 CaptureMember = Annotated[Membership, Depends(capture_membership)]
 
 
+def owner_membership(member: Member) -> Membership:
+    # Technical/ops internals (job stage, attempts, indexing counters) are not
+    # part of the client-facing surface any capture role should see.
+    if member.role != "owner":
+        raise ApplicationError(403, "Owner role required")
+    return member
+
+
+Owner = Annotated[Membership, Depends(owner_membership)]
+
+
 def current_platform_staff(db: Db, token: Token) -> User:
     # Deliberately independent of X-Organization-ID and Membership: master mode
     # spans every organization, not the ones this user happens to belong to.

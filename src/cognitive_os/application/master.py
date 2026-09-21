@@ -9,16 +9,27 @@ from sqlalchemy import select
 from cognitive_os.application.policies import search_policy_vectors
 from cognitive_os.application.recording_knowledge import search_vectors
 from cognitive_os.application.usage_dashboard import summary as usage_summary
-from cognitive_os.infrastructure.database.models import Organization
+from cognitive_os.infrastructure.database.models import Organization, Procedure, ProcedureVersion
 
 
 def list_organizations(db):
     return db.scalars(select(Organization).order_by(Organization.name)).all()
 
 
+def _topics(db, organization_id):
+    # The closest existing notion of a "topic" per organization: titles of the
+    # procedures it has actually published, no separate tagging table.
+    query = select(Procedure.title).distinct().join(ProcedureVersion, (
+        ProcedureVersion.procedure_id == Procedure.id) & (
+        ProcedureVersion.organization_id == Procedure.organization_id)).where(
+        Procedure.organization_id == organization_id, ProcedureVersion.status == "published").order_by(
+        Procedure.title)
+    return list(db.scalars(query))
+
+
 def compare_usage(db, days=7):
     return [{"organization_id": org.id, "organization_name": org.name,
-             **usage_summary(db, org.id, days)} for org in list_organizations(db)]
+             "topics": _topics(db, org.id), **usage_summary(db, org.id, days)} for org in list_organizations(db)]
 
 
 def _compare(db, settings, question, embedding_provider, answer_provider, search):

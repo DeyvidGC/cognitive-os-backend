@@ -14,6 +14,7 @@ class OrganizationSummary(BaseModel):
 class MasterUsageEntry(UsageSummaryResponse):
     organization_id: UUID
     organization_name: str
+    topics: list[str]
 
 
 class MasterQuestion(BaseModel):

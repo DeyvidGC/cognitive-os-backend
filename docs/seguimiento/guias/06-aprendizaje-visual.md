@@ -245,7 +245,8 @@ condicionales; edicion de ramas y reglas de negocio queda en el backlog.
 ## Integracion restante del frontend
 
 - `ScreenStudio`: enviar capturas puntuales al socket solo con consentimiento;
-  detener al ocultar/cerrar sesion. El arreglo del reproductor ya fue aplicado.
+  detener al cerrar sesion; mantener la llamada y las capturas al ocultar la
+  pestana o cambiar de aplicacion. El arreglo del reproductor ya fue aplicado.
 - `AgentConversation`: canal live, historial, reintentos por message_id y errores
   401/403/409/429/503 sin duplicar notas.
 - Nuevo: captura de microfono + reproduccion de audio TTS para `/agent/live-voice`

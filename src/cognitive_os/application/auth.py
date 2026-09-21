@@ -87,6 +87,7 @@ def profile(db: Session, user_id) -> UserResponse:
         Organization, Organization.id == Membership.organization_id
     ).where(Membership.user_id == user_id)).all()
     return UserResponse(id=user.id, email=credential.email, display_name=user.display_name,
+                        is_platform_staff=user.is_platform_staff,
                         memberships=[dict(organization_id=m.organization_id,
                                           organization_name=name, role=m.role)
                                      for m, name in memberships])

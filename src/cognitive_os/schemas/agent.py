@@ -38,7 +38,9 @@ class AgentReply(BaseModel):
 class AgentVoiceInput(BaseModel):
     """Text control frames on the live voice channel; audio travels as binary WS frames."""
     model_config = ConfigDict(extra="forbid")
-    type: Literal["frame", "clarification_answer", "end"]
+    type: Literal["frame", "clarification_answer", "interrupt", "end"]
+    item_id: str | None = Field(default=None, max_length=200)
+    audio_end_ms: int = Field(default=0, ge=0, le=3600000)
     image_base64: str | None = Field(default=None, max_length=700000, repr=False)
     clarification_id: UUID | None = None
     text: str = Field(default="", max_length=5000)

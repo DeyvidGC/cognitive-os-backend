@@ -15,6 +15,7 @@ from cognitive_os.api.v1.endpoints.policies import router as policies_router
 from cognitive_os.api.v1.endpoints.change_proposals import router as change_proposals_router
 from cognitive_os.api.v1.endpoints.master import router as master_router
 from cognitive_os.api.v1.endpoints.home_dashboard import router as home_dashboard_router
+from cognitive_os.api.v1.endpoints.search import router as search_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -32,3 +33,4 @@ api_router.include_router(policies_router)
 api_router.include_router(change_proposals_router)
 api_router.include_router(master_router)
 api_router.include_router(home_dashboard_router)
+api_router.include_router(search_router)
